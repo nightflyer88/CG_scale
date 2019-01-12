@@ -42,7 +42,7 @@ Um die [Firmware](https://github.com/nightflyer88/CG_scale/archive/master.zip) a
 Danach nach "u8g2" suchen, und die lib von Oliver installieren:
 ![u8g2](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/u8g2_lib.png)
 
-Nun das Arduino Board per USB am Computer anschliessen, und unter Werkzeuge das entsprechende Board sowie Port auswählen. Wenn die Datei "CG_scale.ino" in der Arduino IDE bereits geöffnet wurde, kann nun oben links (Pfeil) die Firmware hochgeladen werden. Wurde der Uploadvorgang ohne Fehlermeldung abgeschlossen, hat mans schon geschafft !
+Nun das Arduino Board per USB am Computer anschliessen, und unter Werkzeuge das entsprechende Board sowie Port auswählen. Wenn die Datei "CG_scale.ino" in der Arduino IDE bereits geöffnet wurde, kann nun oben links (Pfeil) die Firmware hochgeladen werden. Wurde der Uploadvorgang ohne Fehlermeldung abgeschlossen, hat mans schon geschafft.
 
 ### Parameter Einstellungen
 
@@ -50,7 +50,7 @@ Die Parameter werden per serieller Schnittstellen parametriert. Das Arduino Boar
 
 ![menu](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/serial_menu.png)
 
-Zuerst müssen die mechanischen Dimensionen definiert werden, also Menü 1-4. Die Batteriespannung wird in Menü 11 aktiviert. Alle Parameter werden im internen EEprom gespeichert und gehen auch nach einem Softwareupdatenicht verloren.
+Zuerst müssen die mechanischen Dimensionen definiert werden, also Menü 1-4. Die Batteriespannung wird in Menü 11 aktiviert. Alle Parameter werden im internen EEprom gespeichert und gehen auch nach einem Softwareupdate nicht verloren.
 
 
 ### Kalibrierung
