@@ -36,6 +36,7 @@ Mechanische Anordnung:
 ### Firmware laden
 
 Um die [Firmware](https://github.com/nightflyer88/CG_scale/archive/master.zip) auf das Arduino Board zu laden, wird die [Arduino IDE](https://www.arduino.cc/en/main/software) benötig. Nachdem die Arduino IDE auf dem Computer installiert wurde, müssen noch zwei Bibliotheken installiert werden. Unter Sketch > Bibliotheken einbinden > Bibliotheken verwalten... gelangt man in den Bibliotheksverwalter. Nun nach "HX711" suchen und die lib von Olav Kallhovd installieren:
+
 ![hx711](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/hx711_lib.png)
 
 Danach nach "u8g2" suchen, und die lib von Oliver installieren:
