@@ -9,7 +9,7 @@
 
   ******************************************************************
   history:
-  V1.0    beta      first release
+  V1.0    12.01.19      first release
 
 
   ******************************************************************
@@ -316,7 +316,7 @@ void loop() {
 
       // CG transverse axis
       if (nLoadcells > 2) {
-        CG_trans = (distanceX3 / 2) - ((weightLoadCell1 * distanceX3) / (weightLoadCell1 + weightLoadCell3));
+        CG_trans = (distanceX3 / 2) - (((weightLoadCell1 + weightLoadCell2 / 2) * distanceX3) / weightTotal);
       }
     }
 
