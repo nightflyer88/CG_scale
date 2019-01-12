@@ -13,7 +13,6 @@ Die wichtigsten Funktionen:
 
 ### Übersicht
 
-Anzeige auf dem OLED Display:
 ![init](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/cgScale_init.jpeg)
 ![run](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/cgScale.jpeg)
 
