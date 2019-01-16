@@ -52,16 +52,19 @@
 #include <EEPROM.h>
 #include <Wire.h>
 
-// libraries for ESP8266 (NodeMCU 1.0 )
-#ifdef ARDUINO_ESP8266_NODEMCU
+// libraries for ESP8266
+#if defined(ESP8266)
 #include <FS.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
+#include "settings_ESP8266.h"
 #endif
 
-// Settings in separate file
-#include "settings.h"
+// settings for AVR
+#if defined(__AVR__)
+#include "settings_AVR.h"
+#endif
 
 // HX711 constructor (dout pin, sck pint):
 HX711_ADC LoadCell_1(PIN_LOADCELL1_DOUT, PIN_LOADCELL1_PD_SCK);
@@ -69,7 +72,7 @@ HX711_ADC LoadCell_2(PIN_LOADCELL2_DOUT, PIN_LOADCELL2_PD_SCK);
 HX711_ADC LoadCell_3(PIN_LOADCELL3_DOUT, PIN_LOADCELL3_PD_SCK);
 
 // webserver constructor
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
 ESP8266WebServer server(80);
 IPAddress apIP(ip[0], ip[1], ip[2], ip[3]);
 #endif
@@ -186,7 +189,7 @@ void(* resetCPU) (void) = 0;
 // save values to eeprom
 void saveLoadcells() {
   EEPROM.put(P_NUMBER_LOADCELLS, nLoadcells);
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
   EEPROM.commit();
 #endif
 }
@@ -194,7 +197,7 @@ void saveLoadcells() {
 
 void saveDistanceX1() {
   EEPROM.put(P_DISTANCE_X1, distanceX1);
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
   EEPROM.commit();
 #endif
 }
@@ -202,7 +205,7 @@ void saveDistanceX1() {
 
 void saveDistanceX2() {
   EEPROM.put(P_DISTANCE_X2, distanceX2);
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
   EEPROM.commit();
 #endif
 }
@@ -210,7 +213,7 @@ void saveDistanceX2() {
 
 void saveDistanceX3() {
   EEPROM.put(P_DISTANCE_X3, distanceX3);
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
   EEPROM.commit();
 #endif
 }
@@ -218,7 +221,7 @@ void saveDistanceX3() {
 
 void saveRefWeight() {
   EEPROM.put(P_REF_WEIGHT, refWeight);
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
   EEPROM.commit();
 #endif
 }
@@ -226,7 +229,7 @@ void saveRefWeight() {
 
 void saveRefCG() {
   EEPROM.put(P_REF_CG, refCG);
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
   EEPROM.commit();
 #endif
 }
@@ -235,7 +238,7 @@ void saveRefCG() {
 void saveCalFactor1() {
   LoadCell_1.setCalFactor(calFactorLoadcell1);
   EEPROM.put(P_LOADCELL1_CALIBRATION_FACTOR, calFactorLoadcell1);
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
   EEPROM.commit();
 #endif
 }
@@ -244,7 +247,7 @@ void saveCalFactor1() {
 void saveCalFactor2() {
   LoadCell_2.setCalFactor(calFactorLoadcell2);
   EEPROM.put(P_LOADCELL2_CALIBRATION_FACTOR, calFactorLoadcell2);
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
   EEPROM.commit();
 #endif
 }
@@ -253,7 +256,7 @@ void saveCalFactor2() {
 void saveCalFactor3() {
   LoadCell_3.setCalFactor(calFactorLoadcell3);
   EEPROM.put(P_LOADCELL3_CALIBRATION_FACTOR, calFactorLoadcell3);
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
   EEPROM.commit();
 #endif
 }
@@ -261,7 +264,7 @@ void saveCalFactor3() {
 
 void saveResistorR1() {
   EEPROM.put(P_RESISTOR_R1, resistorR1);
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
   EEPROM.commit();
 #endif
 }
@@ -269,14 +272,14 @@ void saveResistorR1() {
 
 void saveResistorR2() {
   EEPROM.put(P_RESISTOR_R2, resistorR2);
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
   EEPROM.commit();
 #endif
 }
 
 void saveEnableBatVolt() {
   EEPROM.put(P_ENABLE_BATVOLT, enableBatVolt);
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
   EEPROM.commit();
 #endif
 }
@@ -311,7 +314,7 @@ void auto_calibrate() {
 
 void setup() {
 
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
   // init webserver
   WiFi.mode(WIFI_AP);
   WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
@@ -660,7 +663,7 @@ void loop() {
                 EEPROM.write(i, 0xFF);
               }
               Serial.end();
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
               EEPROM.commit();
 #endif
               resetCPU();
@@ -828,14 +831,14 @@ void loop() {
     }
   }
 
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
   server.handleClient();
 #endif
 
 }
 
 
-#ifdef ARDUINO_ESP8266_NODEMCU
+#if defined(ESP8266)
 void main_page()
 {
   char buff[8];
