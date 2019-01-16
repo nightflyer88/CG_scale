@@ -4,11 +4,12 @@
                       (c) 2019 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "1.0"
+#define CGSCALE_VERSION "1.0.51"
 /*
 
   ******************************************************************
   history:
+  V1.1    beta          ESP8266
   V1.0    12.01.19      first release
 
 
@@ -51,6 +52,14 @@
 #include <EEPROM.h>
 #include <Wire.h>
 
+// libraries for ESP8266 (NodeMCU 1.0 )
+#ifdef ARDUINO_ESP8266_NODEMCU
+#include <FS.h>
+#include <ESP8266WiFi.h>
+#include <WiFiClient.h>
+#include <ESP8266WebServer.h>
+#endif
+
 // Settings in separate file
 #include "settings.h"
 
@@ -58,6 +67,12 @@
 HX711_ADC LoadCell_1(PIN_LOADCELL1_DOUT, PIN_LOADCELL1_PD_SCK);
 HX711_ADC LoadCell_2(PIN_LOADCELL2_DOUT, PIN_LOADCELL2_PD_SCK);
 HX711_ADC LoadCell_3(PIN_LOADCELL3_DOUT, PIN_LOADCELL3_PD_SCK);
+
+// webserver constructor
+#ifdef ARDUINO_ESP8266_NODEMCU
+ESP8266WebServer server(80);
+IPAddress apIP(ip[0], ip[1], ip[2], ip[3]);
+#endif
 
 // serial menu
 enum
@@ -73,12 +88,15 @@ enum
   MENU_LOADCELL1_CALIBRATION_FACTOR,
   MENU_LOADCELL2_CALIBRATION_FACTOR,
   MENU_LOADCELL3_CALIBRATION_FACTOR,
+  MENU_RESISTOR_R1,
+  MENU_RESISTOR_R2,
   MENU_BATTERY_MEASUREMENT,
   MENU_SHOW_ACTUAL,
   MENU_RESET_DEFAULT
 };
 
 // EEprom parameter addresses
+#define EEPROM_SIZE 120
 enum
 {
   P_NUMBER_LOADCELLS =                  1,
@@ -90,7 +108,9 @@ enum
   P_LOADCELL3_CALIBRATION_FACTOR =      P_LOADCELL2_CALIBRATION_FACTOR + sizeof(float),
   P_ENABLE_BATVOLT =                    P_LOADCELL3_CALIBRATION_FACTOR + sizeof(float),
   P_REF_WEIGHT =                        P_ENABLE_BATVOLT + sizeof(float),
-  P_REF_CG =                            P_REF_WEIGHT + sizeof(float)
+  P_REF_CG =                            P_REF_WEIGHT + sizeof(float),
+  P_RESISTOR_R1 =                       P_REF_CG + sizeof(float),
+  P_RESISTOR_R2 =                       P_RESISTOR_R1 + sizeof(float)
 };
 
 // battery image 12x6
@@ -126,7 +146,7 @@ static const unsigned char CGtransImage[] U8X8_PROGMEM = {
 };
 
 // set default text
-static const String PROGMEM newValueText = "Set new value:";
+static const String newValueText = "Set new value:";
 
 // load default values
 uint8_t nLoadcells = NUMBER_LOADCELLS;
@@ -136,6 +156,8 @@ float distanceX3 = DISTANCE_X3;
 float calFactorLoadcell1 = LOADCELL1_CALIBRATION_FACTOR;
 float calFactorLoadcell2 = LOADCELL2_CALIBRATION_FACTOR;
 float calFactorLoadcell3 = LOADCELL3_CALIBRATION_FACTOR;
+float resistorR1 = RESISTOR_R1;
+float resistorR2 = RESISTOR_R2;
 bool enableBatVolt = ENABLE_VOLTAGE;
 float refWeight = REF_WEIGHT;
 float refCG = REF_CG;
@@ -147,9 +169,12 @@ float weightLoadCell3 = 0;
 float lastWeightLoadCell1 = 0;
 float lastWeightLoadCell2 = 0;
 float lastWeightLoadCell3 = 0;
+float weightTotal = 0;
+float CG_length = 0;
+float CG_trans = 0;
+float batVolt = 0;
 unsigned long lastTimeMenu = 0;
 unsigned long lastTimeLoadcell = 0;
-bool displayInit = false;
 bool updateMenu = true;
 int menuPage = 0;
 
@@ -158,26 +183,159 @@ int menuPage = 0;
 void(* resetCPU) (void) = 0;
 
 
-// save calibration factors
+// save values to eeprom
+void saveLoadcells() {
+  EEPROM.put(P_NUMBER_LOADCELLS, nLoadcells);
+#ifdef ARDUINO_ESP8266_NODEMCU
+  EEPROM.commit();
+#endif
+}
+
+
+void saveDistanceX1() {
+  EEPROM.put(P_DISTANCE_X1, distanceX1);
+#ifdef ARDUINO_ESP8266_NODEMCU
+  EEPROM.commit();
+#endif
+}
+
+
+void saveDistanceX2() {
+  EEPROM.put(P_DISTANCE_X2, distanceX2);
+#ifdef ARDUINO_ESP8266_NODEMCU
+  EEPROM.commit();
+#endif
+}
+
+
+void saveDistanceX3() {
+  EEPROM.put(P_DISTANCE_X3, distanceX3);
+#ifdef ARDUINO_ESP8266_NODEMCU
+  EEPROM.commit();
+#endif
+}
+
+
+void saveRefWeight() {
+  EEPROM.put(P_REF_WEIGHT, refWeight);
+#ifdef ARDUINO_ESP8266_NODEMCU
+  EEPROM.commit();
+#endif
+}
+
+
+void saveRefCG() {
+  EEPROM.put(P_REF_CG, refCG);
+#ifdef ARDUINO_ESP8266_NODEMCU
+  EEPROM.commit();
+#endif
+}
+
+
 void saveCalFactor1() {
   LoadCell_1.setCalFactor(calFactorLoadcell1);
   EEPROM.put(P_LOADCELL1_CALIBRATION_FACTOR, calFactorLoadcell1);
+#ifdef ARDUINO_ESP8266_NODEMCU
+  EEPROM.commit();
+#endif
 }
 
 
 void saveCalFactor2() {
   LoadCell_2.setCalFactor(calFactorLoadcell2);
   EEPROM.put(P_LOADCELL2_CALIBRATION_FACTOR, calFactorLoadcell2);
+#ifdef ARDUINO_ESP8266_NODEMCU
+  EEPROM.commit();
+#endif
 }
 
 
 void saveCalFactor3() {
   LoadCell_3.setCalFactor(calFactorLoadcell3);
   EEPROM.put(P_LOADCELL3_CALIBRATION_FACTOR, calFactorLoadcell3);
+#ifdef ARDUINO_ESP8266_NODEMCU
+  EEPROM.commit();
+#endif
+}
+
+
+void saveResistorR1() {
+  EEPROM.put(P_RESISTOR_R1, resistorR1);
+#ifdef ARDUINO_ESP8266_NODEMCU
+  EEPROM.commit();
+#endif
+}
+
+
+void saveResistorR2() {
+  EEPROM.put(P_RESISTOR_R2, resistorR2);
+#ifdef ARDUINO_ESP8266_NODEMCU
+  EEPROM.commit();
+#endif
+}
+
+void saveEnableBatVolt() {
+  EEPROM.put(P_ENABLE_BATVOLT, enableBatVolt);
+#ifdef ARDUINO_ESP8266_NODEMCU
+  EEPROM.commit();
+#endif
+}
+
+void auto_calibrate() {
+  Serial.print(F("Autocalibration is running"));
+  for (int i = 0; i <= 20; i++) {
+    Serial.print(F("."));
+    delay(100);
+  }
+  // calculate weight
+  float toWeightLoadCell2 = ((refCG - distanceX1) * refWeight) / distanceX2;
+  float toWeightLoadCell1 = refWeight - toWeightLoadCell2;
+  float toWeightLoadCell3 = 0;
+  if (nLoadcells > 2) {
+    toWeightLoadCell1 = toWeightLoadCell1 / 2;
+    toWeightLoadCell3 = toWeightLoadCell1;
+  }
+  // calculate calibration factors
+  calFactorLoadcell1 = calFactorLoadcell1 / (toWeightLoadCell1 / weightLoadCell1);
+  calFactorLoadcell2 = calFactorLoadcell2 / (toWeightLoadCell2 / weightLoadCell2);
+  if (nLoadcells > 2) {
+    calFactorLoadcell3 = calFactorLoadcell3 / (toWeightLoadCell3 / weightLoadCell3);
+  }
+  saveCalFactor1();
+  saveCalFactor2();
+  saveCalFactor3();
+  // finish
+  Serial.println(F("done"));
 }
 
 
 void setup() {
+
+#ifdef ARDUINO_ESP8266_NODEMCU
+  // init webserver
+  WiFi.mode(WIFI_AP);
+  WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
+  WiFi.softAP(ssid, password);
+
+  server.begin();
+  server.on("/", main_page);
+  server.on("/index.html", main_page);
+  server.on("/settings", settings_page);
+  server.on("/settings.png", settingsImg);
+  server.on("/weight.png", weightImg);
+  server.on("/cg.png", cgImg);
+  server.on("/cglr.png", cgLRimg);
+  server.on("/battery.png", batteryImg);
+  server.on("/CG_scale_mechanics.png", mechanicsImg);
+  server.on("/bootstrap.min.css", bootstrap);
+  server.on("bootstrap.min.css", bootstrap);
+  server.on("/popper.min.js", popper);
+  server.on("/bootstrap.min.js", bootstrapmin);
+  server.on("bootstrap.min.js", bootstrapmin);
+
+  SPIFFS.begin();
+  EEPROM.begin(EEPROM_SIZE);
+#endif
 
   // init OLED display
   oledDisplay.begin();
@@ -237,25 +395,44 @@ void setup() {
     EEPROM.get(P_REF_CG, refCG);
   }
 
+  if (EEPROM.read(P_RESISTOR_R1) != 0xFF) {
+    EEPROM.get(P_RESISTOR_R1, resistorR1);
+  }
+
+  if (EEPROM.read(P_RESISTOR_R2) != 0xFF) {
+    EEPROM.get(P_RESISTOR_R2, resistorR2);
+  }
+
   // init Loadcells
   LoadCell_1.begin();
   LoadCell_2.begin();
-  LoadCell_3.begin();
+  if (nLoadcells > 2) {
+    LoadCell_3.begin();
+  }
 
   // tare
-  while (!LoadCell_1.startMultiple(STABILISINGTIME) && !LoadCell_2.startMultiple(STABILISINGTIME) && !LoadCell_3.startMultiple(STABILISINGTIME)) {
+  if (nLoadcells > 2) {
+    while (!LoadCell_1.startMultiple(STABILISINGTIME) && !LoadCell_2.startMultiple(STABILISINGTIME) && !LoadCell_3.startMultiple(STABILISINGTIME)) {
+    }
+  } else {
+    while (!LoadCell_1.startMultiple(STABILISINGTIME) && !LoadCell_2.startMultiple(STABILISINGTIME)) {
+    }
   }
 
   // set calibration factor
   LoadCell_1.setCalFactor(calFactorLoadcell1);
   LoadCell_2.setCalFactor(calFactorLoadcell2);
-  LoadCell_3.setCalFactor(calFactorLoadcell3);
+  if (nLoadcells > 2) {
+    LoadCell_3.setCalFactor(calFactorLoadcell3);
+  }
 
   // stabilize scale values
   for (int i = 0; i <= 5; i++) {
     LoadCell_1.update();
     LoadCell_2.update();
-    LoadCell_3.update();
+    if (nLoadcells > 2) {
+      LoadCell_3.update();
+    }
     delay(200);
   }
 
@@ -269,7 +446,9 @@ void loop() {
 
   LoadCell_1.update();
   LoadCell_2.update();
-  LoadCell_3.update();
+  if (nLoadcells > 2) {
+    LoadCell_3.update();
+  }
 
 
   // update loadcell values
@@ -299,11 +478,6 @@ void loop() {
   if ((millis() - lastTimeMenu) > UPDATE_INTERVAL_OLED_MENU) {
     lastTimeMenu = millis();
 
-    float weightTotal;
-    float CG_length = 0;
-    float CG_trans = 0;
-    float batVolt = 0;
-
     // total model weight
     weightTotal = weightLoadCell1 + weightLoadCell2 + weightLoadCell3;
     if (weightTotal < MINIMAL_TOTAL_WEIGHT && weightTotal > MINIMAL_TOTAL_WEIGHT * -1) {
@@ -318,11 +492,14 @@ void loop() {
       if (nLoadcells > 2) {
         CG_trans = (distanceX3 / 2) - (((weightLoadCell1 + weightLoadCell2 / 2) * distanceX3) / weightTotal);
       }
+    }else{
+      CG_length = 0;
+      CG_trans = 0;
     }
 
     // read battery voltage
     if (enableBatVolt) {
-      batVolt = (analogRead(VOLTAGE_PIN) / 1024.0) * V_REF * (float(RESISTOR_R1 + RESISTOR_R2) / RESISTOR_R2) / 1000.0;
+      batVolt = (analogRead(VOLTAGE_PIN) / 1024.0) * V_REF * ((resistorR1 + resistorR2) / resistorR2) / 1000.0;
     }
 
     // print to display
@@ -389,66 +566,43 @@ void loop() {
             break;
           case MENU_LOADCELLS:
             nLoadcells = Serial.parseInt();
-            EEPROM.put(P_NUMBER_LOADCELLS, nLoadcells);
+            saveLoadcells();
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_DISTANCE_X1:
             distanceX1 = Serial.parseFloat();
-            EEPROM.put(P_DISTANCE_X1, distanceX1);
+            saveDistanceX1();
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_DISTANCE_X2:
             distanceX2 = Serial.parseFloat();
-            EEPROM.put(P_DISTANCE_X2, distanceX2);
+            saveDistanceX2();
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_DISTANCE_X3:
             distanceX3 = Serial.parseFloat();
-            EEPROM.put(P_DISTANCE_X3, distanceX3);
+            saveDistanceX3();
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_REF_WEIGHT:
             refWeight = Serial.parseFloat();
-            EEPROM.put(P_REF_WEIGHT, refWeight);
+            saveRefWeight();
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_REF_CG:
             refCG = Serial.parseFloat();
-            EEPROM.put(P_REF_CG, refCG);
+            saveRefCG();
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_AUTO_CALIBRATE:
             if (Serial.read() == 'J') {
-              Serial.print(F("Autocalibration is running"));
-              for (int i = 0; i <= 20; i++) {
-                Serial.print(F("."));
-                delay(100);
-              }
-              // calculate weight
-              float toWeightLoadCell2 = ((refCG - distanceX1) * refWeight) / distanceX2;
-              float toWeightLoadCell1 = refWeight - toWeightLoadCell2;
-              float toWeightLoadCell3 = 0;
-              if (nLoadcells > 2) {
-                toWeightLoadCell1 = toWeightLoadCell1 / 2;
-                toWeightLoadCell3 = toWeightLoadCell1;
-              }
-              // calculate calibration factors
-              calFactorLoadcell1 = calFactorLoadcell1 / (toWeightLoadCell1 / weightLoadCell1);
-              calFactorLoadcell2 = calFactorLoadcell2 / (toWeightLoadCell2 / weightLoadCell2);
-              if (nLoadcells > 2) {
-                calFactorLoadcell3 = calFactorLoadcell3 / (toWeightLoadCell3 / weightLoadCell3);
-              }
-              saveCalFactor1();
-              saveCalFactor2();
-              saveCalFactor3();
-              // finish
-              Serial.println(F("done"));
+              auto_calibrate();
               menuPage = 0;
               updateMenu = true;
             }
@@ -471,13 +625,25 @@ void loop() {
             menuPage = 0;
             updateMenu = true;
             break;
+          case MENU_RESISTOR_R1:
+            resistorR1 = Serial.parseFloat();
+            saveResistorR1();
+            menuPage = 0;
+            updateMenu = true;
+            break;
+          case MENU_RESISTOR_R2:
+            resistorR2 = Serial.parseFloat();
+            saveResistorR2();
+            menuPage = 0;
+            updateMenu = true;
+            break;
           case MENU_BATTERY_MEASUREMENT:
             if (Serial.read() == 'J') {
               enableBatVolt = true;
             } else {
               enableBatVolt = false;
             }
-            EEPROM.put(P_ENABLE_BATVOLT, enableBatVolt);
+            saveEnableBatVolt();
             menuPage = 0;
             updateMenu = true;
             break;
@@ -490,10 +656,13 @@ void loop() {
             //chr = Serial.read();
             if (Serial.read() == 'J') {
               // reset eeprom
-              for (int i = 0; i < 100; i++) {
+              for (int i = 0; i < EEPROM_SIZE; i++) {
                 EEPROM.write(i, 0xFF);
               }
               Serial.end();
+#ifdef ARDUINO_ESP8266_NODEMCU
+              EEPROM.commit();
+#endif
               resetCPU();
             }
             menuPage = 0;
@@ -530,13 +699,17 @@ void loop() {
           Serial.print(calFactorLoadcell2);
           Serial.print(F(")\n10 - Set calibration factor of load cell 3 ("));
           Serial.print(calFactorLoadcell3);
-          Serial.print(F(")\n11 - Enable battery voltage measurement ("));
+          Serial.print(F(")\n11 - Set value of resistor R1 ("));
+          Serial.print(resistorR1);
+          Serial.print(F("ohm)\n12 - Set value of resistor R2 ("));
+          Serial.print(resistorR2);
+          Serial.print(F("ohm)\n13 - Enable battery voltage measurement ("));
           if (enableBatVolt) {
             Serial.print(F("enabled)\n"));
           } else {
             Serial.print(F("disabled)\n"));
           }
-          Serial.print(F("12 - Show actual values\n13 - Reset to factory defaults\n\n"));
+          Serial.print(F("14 - Show actual values\n15 - Reset to factory defaults\n\n"));
           Serial.print(F("Please choose the menu number:"));
           updateMenu = false;
           break;
@@ -603,6 +776,18 @@ void loop() {
           Serial.print(newValueText);
           updateMenu = false;
           break;
+        case MENU_RESISTOR_R1:
+          Serial.print(F("\n\nValue of resistor R1: "));
+          Serial.println(resistorR1);
+          Serial.print(newValueText);
+          updateMenu = false;
+          break;
+        case MENU_RESISTOR_R2:
+          Serial.print(F("\n\nValue of resistor R2: "));
+          Serial.println(resistorR2);
+          Serial.print(newValueText);
+          updateMenu = false;
+          break;
         case MENU_BATTERY_MEASUREMENT:
           Serial.print(F("\n\nEnable battery voltage measurement (J/N)?\n"));
           updateMenu = false;
@@ -642,4 +827,369 @@ void loop() {
       updateMenu = true;
     }
   }
+
+#ifdef ARDUINO_ESP8266_NODEMCU
+  server.handleClient();
+#endif
+
 }
+
+
+#ifdef ARDUINO_ESP8266_NODEMCU
+void main_page()
+{
+  char buff[8];
+  String webPage = "<!doctype html>";
+  webPage += "<html lang=\"en\">";
+  webPage += "<head>";
+  webPage += "<meta charset=\"utf-8\">";
+  webPage += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, shrink-to-fit=no\">";
+  webPage += "<meta name=\"description\" content=\"\">";
+  webPage += "<meta name=\"author\" content=\"\">";
+  webPage += "<link rel=\"icon\" href=\"/favicon.ico\">";
+  webPage += "<title>CG scale by M. Lehmann</title>";
+  webPage += "<link href=\"/bootstrap.min.css\" rel=\"stylesheet\">";
+  webPage += "<link href=\"navbar-top-fixed.css\" rel=\"stylesheet\">";
+  webPage += "<meta http-equiv=\"refresh\" content=\"";
+  webPage += REFRESH_TIME;
+  webPage += "\">";
+  webPage += "</head>";
+  webPage += "<body>";
+  webPage += "<nav class=\"navbar navbar-dark fixed-top bg-dark\">";
+  webPage += "<div class=\"container-fluid\">";
+  webPage += "<div class=\"navbar-header\">";
+  webPage += "<a class=\"navbar-brand\" href=\"#\">";
+  webPage += ssid;
+  webPage += "</a>";
+  webPage += "</div>";
+  webPage += "<ul class=\"nav navbar-nav navbar-right\">";
+  webPage += "<button type=\"button\" onclick=\"location.href = '/settings'\" class=\"btn btn-danger\">";
+  webPage += "<img src=\"settings.png\" alt=\"\" style=\"width:auto;height:30px\">";
+  webPage += "</button>";
+  webPage += "</ul>";
+  webPage += "</div>";
+  webPage += "</nav>";
+  webPage += "<br><br><br>";
+  webPage += "<main role=\"main\" class=\"container\">";
+  webPage += "<div class=\"jumbotron\">";
+
+  // print weight
+  webPage += "<div class=\"container\">";
+  webPage += "<div class=\"row mt-3\">";
+  webPage += "<div class=\"col-xs-6\"><img src=\"weight.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
+  webPage += "<div class=\"col-xs-6 d-flex align-items-center\"><font size=\"6\"> ";
+  dtostrf(weightTotal, 5, 1, buff);
+  webPage += buff;
+  webPage += "g</div>";
+  webPage += "</div>";
+  webPage += "</div>";
+
+  // print cg
+  webPage += "<div class=\"container\">";
+  webPage += "<div class=\"row mt-3\">";
+  webPage += "<div class=\"col-xs-6\"><img src=\"cg.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
+  webPage += "<div class=\"col-xs-6 d-flex align-items-center\"><font size=\"6\"> ";
+  dtostrf(CG_length, 5, 1, buff);
+  webPage += buff;
+  webPage += "mm</div>";
+  webPage += "</div>";
+  webPage += "</div>";
+
+  // print cg trans
+  if (nLoadcells > 2) {
+    //webPage += "<br>";
+    webPage += "<div class=\"container\">";
+    webPage += "<div class=\"row mt-3\">";
+    webPage += "<div class=\"col-xs-6\"><img src=\"cglr.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
+    webPage += "<div class=\"col-xs-6 d-flex align-items-center\"><font size=\"6\"> ";
+    dtostrf(CG_trans, 5, 1, buff);
+    webPage += buff;
+    webPage += "mm</div>";
+    webPage += "</div>";
+    webPage += "</div>";
+
+  }
+
+  // print battery
+  if (enableBatVolt) {
+    //webPage += "<br>";
+    webPage += "<div class=\"container\">";
+    webPage += "<div class=\"row mt-3\">";
+    webPage += "<div class=\"col-xs-6\"><img src=\"battery.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
+    webPage += "<div class=\"col-xs-6 d-flex align-items-center\"><font size=\"6\"> ";
+    webPage += batVolt;
+    webPage += "V</div>";
+    webPage += "</div>";
+    webPage += "</div>";
+  }
+  webPage += "</div>";
+  webPage += "</main>";
+  webPage += "<p><font size=\"2\"><center>(c) 2019 M. Lehmann - Version: ";
+  webPage += CGSCALE_VERSION;
+  webPage += "</center></font></p>";
+  webPage += "<script src=\"/bootstrap.min.js\"></script>";
+  webPage += "</body>";
+  webPage += "</html>";
+
+  server.send(200, "text/html", webPage);
+
+}
+
+void settings_page()
+{
+  if ( server.hasArg("nLoadcells")) {
+    nLoadcells = server.arg("nLoadcells").toFloat();
+    saveLoadcells();
+  }
+  if ( server.hasArg("distanceX1")) {
+    distanceX1 = server.arg("distanceX1").toFloat();
+    saveDistanceX1();
+  }
+  if ( server.hasArg("distanceX2")) {
+    distanceX2 = server.arg("distanceX2").toFloat();
+    saveDistanceX2();
+  }
+  if ( server.hasArg("distanceX3")) {
+    distanceX3 = server.arg("distanceX3").toFloat();
+    saveDistanceX3();
+  }
+  if ( server.hasArg("refWeight")) {
+    refWeight = server.arg("refWeight").toFloat();
+    saveRefWeight();
+  }
+  if ( server.hasArg("refCG")) {
+    refCG = server.arg("refCG").toFloat();
+    saveRefCG();
+  }
+  if ( server.hasArg("calFactorLoadcell1")) {
+    calFactorLoadcell1 = server.arg("calFactorLoadcell1").toFloat();
+    saveCalFactor1();
+  }
+  if ( server.hasArg("calFactorLoadcell2")) {
+    calFactorLoadcell2 = server.arg("calFactorLoadcell2").toFloat();
+    saveCalFactor2();
+  }
+  if ( server.hasArg("calFactorLoadcell3")) {
+    calFactorLoadcell3 = server.arg("calFactorLoadcell3").toFloat();
+    saveCalFactor3();
+  }
+  if ( server.hasArg("resistorR1")) {
+    resistorR1 = server.arg("resistorR1").toFloat();
+    saveResistorR1();
+  }
+  if ( server.hasArg("resistorR2")) {
+    resistorR2 = server.arg("resistorR2").toFloat();
+    saveResistorR2();
+  }
+  if ( server.hasArg("enableBatVolt")) {
+    if (server.arg("enableBatVolt") == "ON") {
+      enableBatVolt = true;
+    } else {
+      enableBatVolt = false;
+    }
+  }
+  if ( server.hasArg("calibrate")) {
+    auto_calibrate();
+  }
+
+
+  String webPage = "<!doctype html>";
+  webPage += "<html lang=\"en\">";
+  webPage += "<head>";
+  webPage += "<meta charset=\"utf-8\">";
+  webPage += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, shrink-to-fit=no\">";
+  webPage += "<meta name=\"description\" content=\"\">";
+  webPage += "<meta name=\"author\" content=\"\">";
+  webPage += "<link rel=\"icon\" href=\"/favicon.ico\">";
+  webPage += "<title>CG scale by M. Lehmann</title>";
+  webPage += "<link href=\"/bootstrap.min.css\" rel=\"stylesheet\">";
+  webPage += "<link href=\"navbar-top-fixed.css\" rel=\"stylesheet\">";
+  webPage += "</head>";
+  webPage += "<body>";
+  webPage += "<nav class=\"navbar navbar-dark fixed-top bg-dark\">";
+  webPage += "<div class=\"container-fluid\">";
+  webPage += "<div class=\"navbar-header\">";
+  webPage += "<a class=\"navbar-brand\" href=\"#\">";
+  webPage += ssid;
+  webPage += "</a>";
+  webPage += "</div>";
+  webPage += "<ul class=\"nav navbar-nav navbar-right\">";
+  webPage += "<button type=\"button\" onclick=\"location.href = '/'\" class=\"btn btn-danger\">Home</button>";
+  webPage += "</ul>";
+  webPage += "</div>";
+  webPage += "</nav>";
+  webPage += "<br><br><br>";
+  webPage += "<main role=\"main\" class=\"container\">";
+
+  webPage += "<form action=\"/settings\" id=\"saveForm\">";
+  webPage += "<div class=\"form-group\">";
+  webPage += "<label>Number of load cells:</label>";
+  webPage += "<select class=\"form-control\" name=\"nLoadcells\">";
+  if (nLoadcells == 2) {
+    webPage += "<option selected>2</option>";
+    webPage += "<option>3</option>";
+  }
+  if (nLoadcells == 3) {
+    webPage += "<option>2</option>";
+    webPage += "<option selected>3</option>";
+  }
+  webPage += "</select>";
+  webPage += "</div>";
+
+  webPage += "<div class=\"form-group\">";
+  webPage += "<label>Distance X1 [mm]:</label>";
+  webPage += "<input type=\"text\" class=\"form-control\" name=\"distanceX1\" value=\"";
+  webPage += distanceX1;
+  webPage += "\">";
+  webPage += "</div>";
+
+  webPage += "<div class=\"form-group\">";
+  webPage += "<label>Distance X2 [mm]:</label>";
+  webPage += "<input type=\"text\" class=\"form-control\" name=\"distanceX2\" value=\"";
+  webPage += distanceX2;
+  webPage += "\">";
+  webPage += "</div>";
+
+  webPage += "<div class=\"form-group\">";
+  webPage += "<label>Distance X3 [mm]:</label>";
+  webPage += "<input type=\"text\" class=\"form-control\" name=\"distanceX3\" value=\"";
+  webPage += distanceX3;
+  webPage += "\">";
+  webPage += "</div>";
+
+  webPage += "<div class=\"form-group\">";
+  webPage += "<label>Reference weight [g]:</label>";
+  webPage += "<input type=\"text\" class=\"form-control\" name=\"refWeight\" value=\"";
+  webPage += refWeight;
+  webPage += "\">";
+  webPage += "</div>";
+
+  webPage += "<div class=\"form-group\">";
+  webPage += "<label>Reference CG [mm]:</label>";
+  webPage += "<input type=\"text\" class=\"form-control\" name=\"refCG\" value=\"";
+  webPage += refCG;
+  webPage += "\">";
+  webPage += "</div>";
+
+  webPage += "<div class=\"form-group\">";
+  webPage += "<label>Calibration factor of load cell 1:</label>";
+  webPage += "<input type=\"text\" class=\"form-control\" name=\"calFactorLoadcell1\" value=\"";
+  webPage += calFactorLoadcell1;
+  webPage += "\">";
+  webPage += "</div>";
+
+  webPage += "<div class=\"form-group\">";
+  webPage += "<label>Calibration factor of load cell 2:</label>";
+  webPage += "<input type=\"text\" class=\"form-control\" name=\"calFactorLoadcell2\" value=\"";
+  webPage += calFactorLoadcell2;
+  webPage += "\">";
+  webPage += "</div>";
+
+  webPage += "<div class=\"form-group\">";
+  webPage += "<label>Calibration factor of load cell 3:</label>";
+  webPage += "<input type=\"text\" class=\"form-control\" name=\"calFactorLoadcell3\" value=\"";
+  webPage += calFactorLoadcell3;
+  webPage += "\">";
+  webPage += "</div>";
+
+  webPage += "<div class=\"form-group\">";
+  webPage += "<label>Value of resistor R1 [ohm]:</label>";
+  webPage += "<input type=\"text\" class=\"form-control\" name=\"resistorR1\" value=\"";
+  webPage += resistorR1;
+  webPage += "\">";
+  webPage += "</div>";
+
+  webPage += "<div class=\"form-group\">";
+  webPage += "<label>Value of resistor R2 [ohm]:</label>";
+  webPage += "<input type=\"text\" class=\"form-control\" name=\"resistorR2\" value=\"";
+  webPage += resistorR2;
+  webPage += "\">";
+  webPage += "</div>";
+
+  webPage += "<div class=\"form-group\">";
+  webPage += "<label>Voltage measurement:</label>";
+  webPage += "<select class=\"form-control\" name=\"enableBatVolt\">";
+  if (enableBatVolt) {
+    webPage += "<option selected>ON</option>";
+    webPage += "<option>OFF</option>";
+  } else {
+    webPage += "<option>ON</option>";
+    webPage += "<option selected>OFF</option>";
+  }
+  webPage += "</select>";
+  webPage += "</div>";
+
+  webPage += "</form>";
+
+  webPage += "<div class=\"btn-group btn-group-lg\">";
+  webPage += "<button type=\"button submit\" class=\"btn btn-success btn-lg\" form=\"saveForm\">save parameters</button>";
+  webPage += "<form action=\"/settings\" method=\"POST\"><button type=\"button submit\" class=\"btn btn-primary btn-lg\" name=\"calibrate\" value=\"1\">auto calibrate</button></form>";
+  webPage += "</div>";
+
+  webPage += "<img src=\"CG_scale_mechanics.png\" class=\"pull-left mr-4\" alt=\"mechanics\" style=\"width:100%\">";
+
+  webPage += "</main>";
+  webPage += "<p><font size=\"2\"><center>(c) 2019 M. Lehmann - Version: ";
+  webPage += CGSCALE_VERSION;
+  webPage += "</center></font></p>";
+  webPage += "<script src=\"/bootstrap.min.js\"></script>";
+  webPage += "</body>";
+  webPage += "</html>";
+
+  server.send(200, "text/html", webPage);
+}
+
+void settingsImg()
+{
+  File file = SPIFFS.open("/settings.png", "r");
+  size_t sent = server.streamFile(file, "text/css");
+}
+
+void weightImg()
+{
+  File file = SPIFFS.open("/weight.png", "r");
+  size_t sent = server.streamFile(file, "text/css");
+}
+
+void cgImg()
+{
+  File file = SPIFFS.open("/cg.png", "r");
+  size_t sent = server.streamFile(file, "text/css");
+}
+
+void cgLRimg()
+{
+  File file = SPIFFS.open("/cglr.png", "r");
+  size_t sent = server.streamFile(file, "text/css");
+}
+
+void batteryImg()
+{
+  File file = SPIFFS.open("/battery.png", "r");
+  size_t sent = server.streamFile(file, "text/css");
+}
+
+void mechanicsImg()
+{
+  File file = SPIFFS.open("/CG_scale_mechanics.png", "r");
+  size_t sent = server.streamFile(file, "text/css");
+}
+
+void bootstrap()
+{
+  File file = SPIFFS.open("/bootstrap.min.css.gz", "r");
+  size_t sent = server.streamFile(file, "text/css");
+}
+
+void popper()
+{
+  File file = SPIFFS.open("/popper.min.js.gz", "r");
+  size_t sent = server.streamFile(file, "application/javascript");
+}
+
+void bootstrapmin()
+{
+  File file = SPIFFS.open("/bootstrap.min.js.gz", "r");
+  size_t sent = server.streamFile(file, "application/javascript");
+}
+#endif
