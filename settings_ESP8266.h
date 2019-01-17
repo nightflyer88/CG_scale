@@ -59,6 +59,7 @@ CG scale with 3 Loadcells:
 // **** Measurement settings ****
 
 #define STABILISINGTIME               3000     // ms
+#define TARE_TIMEOUT                  4000     // ms
 
 #define UPDATE_INTERVAL_OLED_MENU     500      // ms
 #define UPDATE_INTERVAL_LOADCELL      100      // ms
@@ -100,8 +101,8 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NON
 #define V_REF                         3300     // set supply voltage from 1800 to 5500mV
 
 // voltage divider
-#define RESISTOR_R1                   10000    // ohm
-#define RESISTOR_R2                   20000    // ohm
+#define RESISTOR_R1                   20000    // ohm
+#define RESISTOR_R2                   10000    // ohm
 
 /*
                   voltage input

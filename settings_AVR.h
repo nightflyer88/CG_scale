@@ -59,6 +59,7 @@ CG scale with 3 Loadcells:
 // **** Measurement settings ****
 
 #define STABILISINGTIME               3000     // ms
+#define TARE_TIMEOUT                  4000     // ms
 
 #define UPDATE_INTERVAL_OLED_MENU     500      // ms
 #define UPDATE_INTERVAL_LOADCELL      100      // ms

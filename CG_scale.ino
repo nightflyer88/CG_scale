@@ -4,7 +4,7 @@
                       (c) 2019 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "1.0.51"
+#define CGSCALE_VERSION "1.0.55"
 /*
 
   ******************************************************************
@@ -180,6 +180,8 @@ unsigned long lastTimeMenu = 0;
 unsigned long lastTimeLoadcell = 0;
 bool updateMenu = true;
 int menuPage = 0;
+String errMsg[5] = "";
+int errMsgCnt = 0;
 
 
 // Restart CPU
@@ -414,12 +416,35 @@ void setup() {
   }
 
   // tare
-  if (nLoadcells > 2) {
-    while (!LoadCell_1.startMultiple(STABILISINGTIME) && !LoadCell_2.startMultiple(STABILISINGTIME) && !LoadCell_3.startMultiple(STABILISINGTIME)) {
+  byte loadcell_1_rdy = 0;
+  byte loadcell_2_rdy = 0;
+  byte loadcell_3_rdy = 0;
+  lastTimeLoadcell = millis();
+
+  while ((loadcell_1_rdy + loadcell_2_rdy + loadcell_3_rdy) < 3) {
+    loadcell_1_rdy = LoadCell_1.startMultiple(STABILISINGTIME);
+    loadcell_2_rdy = LoadCell_2.startMultiple(STABILISINGTIME);
+    if (nLoadcells > 2) {
+      loadcell_3_rdy = LoadCell_3.startMultiple(STABILISINGTIME);
+    } else {
+      loadcell_3_rdy = 1;
     }
-  } else {
-    while (!LoadCell_1.startMultiple(STABILISINGTIME) && !LoadCell_2.startMultiple(STABILISINGTIME)) {
+    // timeout
+    if ((millis() - lastTimeLoadcell) > TARE_TIMEOUT) {
+      errMsg[++errMsgCnt] = "ERROR: Timeout TARE\n";
+      break;
     }
+  }
+
+  // check loadcells if error
+  if (!loadcell_1_rdy) {
+    errMsg[++errMsgCnt] = "ERROR: Loadcell 1 not ready\n";
+  }
+  if (!loadcell_2_rdy) {
+    errMsg[++errMsgCnt] = "ERROR: Loadcell 2 not ready\n";
+  }
+  if (!loadcell_3_rdy) {
+    errMsg[++errMsgCnt] = "ERROR: Loadcell 3 not ready\n";
   }
 
   // set calibration factor
@@ -495,7 +520,7 @@ void loop() {
       if (nLoadcells > 2) {
         CG_trans = (distanceX3 / 2) - (((weightLoadCell1 + weightLoadCell2 / 2) * distanceX3) / weightTotal);
       }
-    }else{
+    } else {
       CG_length = 0;
       CG_trans = 0;
     }
@@ -521,38 +546,46 @@ void loop() {
 
     oledDisplay.firstPage();
     do {
-      // print battery
-      if (enableBatVolt) {
-        oledDisplay.drawXBMP(88, 1, 12, 6, batteryImage);
-        dtostrf(batVolt, 2, 2, buff);
-        oledDisplay.setFont(u8g2_font_5x7_tr);
-        oledDisplay.setCursor(123 - oledDisplay.getStrWidth(buff), 7);
+      if (errMsgCnt == 0) {
+        // print battery
+        if (enableBatVolt) {
+          oledDisplay.drawXBMP(88, 1, 12, 6, batteryImage);
+          dtostrf(batVolt, 2, 2, buff);
+          oledDisplay.setFont(u8g2_font_5x7_tr);
+          oledDisplay.setCursor(123 - oledDisplay.getStrWidth(buff), 7);
+          oledDisplay.print(buff);
+          oledDisplay.print(F("V"));
+        }
+
+        // print total weight
+        oledDisplay.drawXBMP(2, pos_weightTotal, 18, 18, weightImage);
+        dtostrf(weightTotal, 5, 1, buff);
+        oledDisplay.setFont(u8g2_font_helvR12_tr);
+        oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), pos_weightTotal + 17);
         oledDisplay.print(buff);
-        oledDisplay.print(F("V"));
-      }
+        oledDisplay.print(F(" g"));
 
-      // print total weight
-      oledDisplay.drawXBMP(2, pos_weightTotal, 18, 18, weightImage);
-      dtostrf(weightTotal, 5, 1, buff);
-      oledDisplay.setFont(u8g2_font_helvR12_tr);
-      oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), pos_weightTotal + 17);
-      oledDisplay.print(buff);
-      oledDisplay.print(F(" g"));
-
-      // print CG longitudinal axis
-      oledDisplay.drawXBMP(2, pos_CG_length, 18, 18, CGImage);
-      dtostrf(CG_length, 5, 1, buff);
-      oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), pos_CG_length + 16);
-      oledDisplay.print(buff);
-      oledDisplay.print(F(" mm"));
-
-      // print CG transverse axis
-      if (nLoadcells > 2) {
-        oledDisplay.drawXBMP(2, 47, 18, 18, CGtransImage);
-        dtostrf(CG_trans, 5, 1, buff);
-        oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), 64);
+        // print CG longitudinal axis
+        oledDisplay.drawXBMP(2, pos_CG_length, 18, 18, CGImage);
+        dtostrf(CG_length, 5, 1, buff);
+        oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), pos_CG_length + 16);
         oledDisplay.print(buff);
         oledDisplay.print(F(" mm"));
+
+        // print CG transverse axis
+        if (nLoadcells > 2) {
+          oledDisplay.drawXBMP(2, 47, 18, 18, CGtransImage);
+          dtostrf(CG_trans, 5, 1, buff);
+          oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), 64);
+          oledDisplay.print(buff);
+          oledDisplay.print(F(" mm"));
+        }
+      } else {
+        oledDisplay.setFont(u8g2_font_5x7_tr);
+        for (int i = 1; i <= errMsgCnt; i++) {
+          oledDisplay.setCursor(0, 7 * i);
+          oledDisplay.print(errMsg[i]);
+        }
       }
 
     } while ( oledDisplay.nextPage() );
@@ -713,6 +746,9 @@ void loop() {
             Serial.print(F("disabled)\n"));
           }
           Serial.print(F("14 - Show actual values\n15 - Reset to factory defaults\n\n"));
+          for (int i = 1; i <= errMsgCnt; i++) {
+            Serial.print(errMsg[i]);
+          }
           Serial.print(F("Please choose the menu number:"));
           updateMenu = false;
           break;
@@ -875,54 +911,60 @@ void main_page()
   webPage += "<br><br><br>";
   webPage += "<main role=\"main\" class=\"container\">";
   webPage += "<div class=\"jumbotron\">";
-
-  // print weight
-  webPage += "<div class=\"container\">";
-  webPage += "<div class=\"row mt-3\">";
-  webPage += "<div class=\"col-xs-6\"><img src=\"weight.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
-  webPage += "<div class=\"col-xs-6 d-flex align-items-center\"><font size=\"6\"> ";
-  dtostrf(weightTotal, 5, 1, buff);
-  webPage += buff;
-  webPage += "g</div>";
-  webPage += "</div>";
-  webPage += "</div>";
-
-  // print cg
-  webPage += "<div class=\"container\">";
-  webPage += "<div class=\"row mt-3\">";
-  webPage += "<div class=\"col-xs-6\"><img src=\"cg.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
-  webPage += "<div class=\"col-xs-6 d-flex align-items-center\"><font size=\"6\"> ";
-  dtostrf(CG_length, 5, 1, buff);
-  webPage += buff;
-  webPage += "mm</div>";
-  webPage += "</div>";
-  webPage += "</div>";
-
-  // print cg trans
-  if (nLoadcells > 2) {
-    //webPage += "<br>";
+  if (errMsgCnt == 0) {
+    // print weight
     webPage += "<div class=\"container\">";
     webPage += "<div class=\"row mt-3\">";
-    webPage += "<div class=\"col-xs-6\"><img src=\"cglr.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
+    webPage += "<div class=\"col-xs-6\"><img src=\"weight.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
     webPage += "<div class=\"col-xs-6 d-flex align-items-center\"><font size=\"6\"> ";
-    dtostrf(CG_trans, 5, 1, buff);
+    dtostrf(weightTotal, 5, 1, buff);
+    webPage += buff;
+    webPage += "g</div>";
+    webPage += "</div>";
+    webPage += "</div>";
+
+    // print cg
+    webPage += "<div class=\"container\">";
+    webPage += "<div class=\"row mt-3\">";
+    webPage += "<div class=\"col-xs-6\"><img src=\"cg.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
+    webPage += "<div class=\"col-xs-6 d-flex align-items-center\"><font size=\"6\"> ";
+    dtostrf(CG_length, 5, 1, buff);
     webPage += buff;
     webPage += "mm</div>";
     webPage += "</div>";
     webPage += "</div>";
 
-  }
+    // print cg trans
+    if (nLoadcells > 2) {
+      webPage += "<div class=\"container\">";
+      webPage += "<div class=\"row mt-3\">";
+      webPage += "<div class=\"col-xs-6\"><img src=\"cglr.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
+      webPage += "<div class=\"col-xs-6 d-flex align-items-center\"><font size=\"6\"> ";
+      dtostrf(CG_trans, 5, 1, buff);
+      webPage += buff;
+      webPage += "mm</div>";
+      webPage += "</div>";
+      webPage += "</div>";
 
-  // print battery
-  if (enableBatVolt) {
-    //webPage += "<br>";
+    }
+
+    // print battery
+    if (enableBatVolt) {
+      webPage += "<div class=\"container\">";
+      webPage += "<div class=\"row mt-3\">";
+      webPage += "<div class=\"col-xs-6\"><img src=\"battery.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
+      webPage += "<div class=\"col-xs-6 d-flex align-items-center\"><font size=\"6\"> ";
+      webPage += batVolt;
+      webPage += "V</div>";
+      webPage += "</div>";
+      webPage += "</div>";
+    }
+  } else {
     webPage += "<div class=\"container\">";
-    webPage += "<div class=\"row mt-3\">";
-    webPage += "<div class=\"col-xs-6\"><img src=\"battery.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
-    webPage += "<div class=\"col-xs-6 d-flex align-items-center\"><font size=\"6\"> ";
-    webPage += batVolt;
-    webPage += "V</div>";
-    webPage += "</div>";
+    webPage += "<font size=\"6\"> ";
+    for (int i = 1; i <= errMsgCnt; i++) {
+      webPage += errMsg[i];
+    }
     webPage += "</div>";
   }
   webPage += "</div>";
