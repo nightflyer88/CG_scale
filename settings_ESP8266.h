@@ -124,12 +124,16 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NON
 
 
 
-// **** Web server settings ****
+// **** Wifi settings ****
 
-// Wifi works as an access point
-const char* ssid =                  "CG scale";   // wifi name
-const char* password =              "";           // wifi password
+#define MAX_SSID_PW_LENGHT          32
 
+// Station mode: connect to available network
+#define SSID_STA                    "myWiFi"
+#define PASSWORD_STA                ""
+#define TIMEOUT_CONNECT             12000   //ms
+
+// Access point mode: create own network
+#define SSID_AP                     "CG scale"
+#define PASSWORD_AP                 ""
 const char ip[4] =                  {1,1,1,1};    // default IP address
-
-#define REFRESH_TIME                3             // [s], reload the main page

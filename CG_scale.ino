@@ -4,7 +4,7 @@
                       (c) 2019 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "1.0.55"
+#define CGSCALE_VERSION "1.0.58"
 /*
 
   ******************************************************************
@@ -58,12 +58,13 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
-#include "settings_ESP8266.h"
 #endif
 
-// settings for AVR
+// load settings
 #if defined(__AVR__)
 #include "settings_AVR.h"
+#elif defined(ESP8266)
+#include "settings_ESP8266.h"
 #endif
 
 // HX711 constructor (dout pin, sck pint):
@@ -78,8 +79,7 @@ IPAddress apIP(ip[0], ip[1], ip[2], ip[3]);
 #endif
 
 // serial menu
-enum
-{
+enum {
   MENU_HOME,
   MENU_LOADCELLS,
   MENU_DISTANCE_X1,
@@ -99,9 +99,7 @@ enum
 };
 
 // EEprom parameter addresses
-#define EEPROM_SIZE 120
-enum
-{
+enum {
   P_NUMBER_LOADCELLS =                  1,
   P_DISTANCE_X1 =                       2,
   P_DISTANCE_X2 =                       P_DISTANCE_X1 + sizeof(float),
@@ -113,7 +111,16 @@ enum
   P_REF_WEIGHT =                        P_ENABLE_BATVOLT + sizeof(float),
   P_REF_CG =                            P_REF_WEIGHT + sizeof(float),
   P_RESISTOR_R1 =                       P_REF_CG + sizeof(float),
-  P_RESISTOR_R2 =                       P_RESISTOR_R1 + sizeof(float)
+  P_RESISTOR_R2 =                       P_RESISTOR_R1 + sizeof(float),
+#if defined(__AVR__)
+  EEPROM_SIZE =                         P_RESISTOR_R2 + sizeof(float)
+#elif defined(ESP8266)
+  P_SSID_STA =                          P_RESISTOR_R2 + sizeof(float),
+  P_PASSWORD_STA =                      P_SSID_STA + MAX_SSID_PW_LENGHT + 1,
+  P_SSID_AP =                           P_PASSWORD_STA + MAX_SSID_PW_LENGHT + 1,
+  P_PASSWORD_AP =                       P_SSID_AP + MAX_SSID_PW_LENGHT + 1,
+  EEPROM_SIZE =                         P_PASSWORD_AP + MAX_SSID_PW_LENGHT + 1
+#endif
 };
 
 // battery image 12x6
@@ -164,6 +171,12 @@ float resistorR2 = RESISTOR_R2;
 bool enableBatVolt = ENABLE_VOLTAGE;
 float refWeight = REF_WEIGHT;
 float refCG = REF_CG;
+#if defined(ESP8266)
+char ssid_STA[MAX_SSID_PW_LENGHT + 1] = SSID_STA;
+char password_STA[MAX_SSID_PW_LENGHT + 1] = PASSWORD_STA;
+char ssid_AP[MAX_SSID_PW_LENGHT + 1] = SSID_AP;
+char password_AP[MAX_SSID_PW_LENGHT + 1] = PASSWORD_AP;
+#endif
 
 // declare variables
 float weightLoadCell1 = 0;
@@ -188,106 +201,42 @@ int errMsgCnt = 0;
 void(* resetCPU) (void) = 0;
 
 
-// save values to eeprom
-void saveLoadcells() {
-  EEPROM.put(P_NUMBER_LOADCELLS, nLoadcells);
+// reset to factory defaults
+void resetDefault() {
+  // reset eeprom
+  for (int i = 0; i < EEPROM_SIZE; i++) {
+    EEPROM.write(i, 0xFF);
+  }
+  Serial.end();
 #if defined(ESP8266)
   EEPROM.commit();
 #endif
+  resetCPU();
 }
 
 
-void saveDistanceX1() {
-  EEPROM.put(P_DISTANCE_X1, distanceX1);
-#if defined(ESP8266)
-  EEPROM.commit();
-#endif
-}
-
-
-void saveDistanceX2() {
-  EEPROM.put(P_DISTANCE_X2, distanceX2);
-#if defined(ESP8266)
-  EEPROM.commit();
-#endif
-}
-
-
-void saveDistanceX3() {
-  EEPROM.put(P_DISTANCE_X3, distanceX3);
-#if defined(ESP8266)
-  EEPROM.commit();
-#endif
-}
-
-
-void saveRefWeight() {
-  EEPROM.put(P_REF_WEIGHT, refWeight);
-#if defined(ESP8266)
-  EEPROM.commit();
-#endif
-}
-
-
-void saveRefCG() {
-  EEPROM.put(P_REF_CG, refCG);
-#if defined(ESP8266)
-  EEPROM.commit();
-#endif
-}
-
-
+// save calibration factor
 void saveCalFactor1() {
   LoadCell_1.setCalFactor(calFactorLoadcell1);
   EEPROM.put(P_LOADCELL1_CALIBRATION_FACTOR, calFactorLoadcell1);
-#if defined(ESP8266)
-  EEPROM.commit();
-#endif
 }
 
 
 void saveCalFactor2() {
   LoadCell_2.setCalFactor(calFactorLoadcell2);
   EEPROM.put(P_LOADCELL2_CALIBRATION_FACTOR, calFactorLoadcell2);
-#if defined(ESP8266)
-  EEPROM.commit();
-#endif
 }
 
 
 void saveCalFactor3() {
   LoadCell_3.setCalFactor(calFactorLoadcell3);
   EEPROM.put(P_LOADCELL3_CALIBRATION_FACTOR, calFactorLoadcell3);
-#if defined(ESP8266)
-  EEPROM.commit();
-#endif
 }
 
 
-void saveResistorR1() {
-  EEPROM.put(P_RESISTOR_R1, resistorR1);
-#if defined(ESP8266)
-  EEPROM.commit();
-#endif
-}
-
-
-void saveResistorR2() {
-  EEPROM.put(P_RESISTOR_R2, resistorR2);
-#if defined(ESP8266)
-  EEPROM.commit();
-#endif
-}
-
-void saveEnableBatVolt() {
-  EEPROM.put(P_ENABLE_BATVOLT, enableBatVolt);
-#if defined(ESP8266)
-  EEPROM.commit();
-#endif
-}
-
-void auto_calibrate() {
-  Serial.print(F("Autocalibration is running"));
+// run auto calibration
+bool runAutoCalibrate() {
+  Serial.print(F("\nAutocalibration is running"));
   for (int i = 0; i <= 20; i++) {
     Serial.print(F("."));
     delay(100);
@@ -316,48 +265,13 @@ void auto_calibrate() {
 
 void setup() {
 
+  // init serial
+  Serial.begin(9600);
+
 #if defined(ESP8266)
-  // init webserver
-  WiFi.mode(WIFI_AP);
-  WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
-  WiFi.softAP(ssid, password);
-
-  server.begin();
-  server.on("/", main_page);
-  server.on("/index.html", main_page);
-  server.on("/settings", settings_page);
-  server.on("/settings.png", settingsImg);
-  server.on("/weight.png", weightImg);
-  server.on("/cg.png", cgImg);
-  server.on("/cglr.png", cgLRimg);
-  server.on("/battery.png", batteryImg);
-  server.on("/CG_scale_mechanics.png", mechanicsImg);
-  server.on("/bootstrap.min.css", bootstrap);
-  server.on("bootstrap.min.css", bootstrap);
-  server.on("/popper.min.js", popper);
-  server.on("/bootstrap.min.js", bootstrapmin);
-  server.on("bootstrap.min.js", bootstrapmin);
-
   SPIFFS.begin();
   EEPROM.begin(EEPROM_SIZE);
 #endif
-
-  // init OLED display
-  oledDisplay.begin();
-  oledDisplay.firstPage();
-  do {
-    oledDisplay.drawXBMP(20, 12, 18, 18, CGImage);
-    oledDisplay.setFont(u8g2_font_helvR12_tr);
-    oledDisplay.setCursor(45, 28);
-    oledDisplay.print(F("CG scale"));
-
-    oledDisplay.setFont(u8g2_font_5x7_tr);
-    oledDisplay.setCursor(35, 55);
-    oledDisplay.print(F("Version: "));
-    oledDisplay.print(CGSCALE_VERSION);
-    oledDisplay.setCursor(20, 64);
-    oledDisplay.print(F("(c) 2019 M. Lehmann"));
-  } while ( oledDisplay.nextPage() );
 
   // read settings from eeprom
   if (EEPROM.read(P_NUMBER_LOADCELLS) != 0xFF) {
@@ -407,6 +321,47 @@ void setup() {
   if (EEPROM.read(P_RESISTOR_R2) != 0xFF) {
     EEPROM.get(P_RESISTOR_R2, resistorR2);
   }
+
+#if defined(ESP8266)
+  if (EEPROM.read(P_SSID_STA) != 0xFF) {
+    EEPROM.get(P_SSID_STA, ssid_STA);
+  }
+
+  if (EEPROM.read(P_PASSWORD_STA) != 0xFF) {
+    EEPROM.get(P_PASSWORD_STA, password_STA);
+  }
+
+  if (EEPROM.read(P_SSID_AP) != 0xFF) {
+    EEPROM.get(P_SSID_AP, ssid_AP);
+  }
+
+  if (EEPROM.read(P_PASSWORD_AP) != 0xFF) {
+    EEPROM.get(P_PASSWORD_AP, password_AP);
+  }
+
+  // Start by connecting to a WiFi network
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid_STA, password_STA);
+
+  long timeoutWiFi = millis();
+#endif
+
+  // init OLED display
+  oledDisplay.begin();
+  oledDisplay.firstPage();
+  do {
+    oledDisplay.drawXBMP(20, 12, 18, 18, CGImage);
+    oledDisplay.setFont(u8g2_font_helvR12_tr);
+    oledDisplay.setCursor(45, 28);
+    oledDisplay.print(F("CG scale"));
+
+    oledDisplay.setFont(u8g2_font_5x7_tr);
+    oledDisplay.setCursor(35, 55);
+    oledDisplay.print(F("Version: "));
+    oledDisplay.print(CGSCALE_VERSION);
+    oledDisplay.setCursor(20, 64);
+    oledDisplay.print(F("(c) 2019 M. Lehmann"));
+  } while ( oledDisplay.nextPage() );
 
   // init Loadcells
   LoadCell_1.begin();
@@ -464,9 +419,61 @@ void setup() {
     delay(200);
   }
 
-  // init serial
-  Serial.begin(9600);
+#if defined(ESP8266)
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    if (WiFi.status() == WL_NO_SSID_AVAIL) {
+      break;
+    } else if (WiFi.status() == WL_CONNECT_FAILED) {
+      break;
+    } else if ((millis() - timeoutWiFi) > TIMEOUT_CONNECT) {
+      break;
+    }
+  }
 
+  if (WiFi.status() == WL_CONNECTED) {
+    // if connected, print status
+    oledDisplay.firstPage();
+    do {
+      oledDisplay.setFont(u8g2_font_5x7_tr);
+      oledDisplay.setCursor(0, 7);
+      oledDisplay.print(F("Connected to WiFi:"));
+      oledDisplay.setCursor(0, 43);
+      oledDisplay.print(F("IP address:"));
+
+      oledDisplay.setFont(u8g2_font_helvR12_tr);
+      oledDisplay.setCursor(0, 28);
+      oledDisplay.print(ssid_STA);
+      oledDisplay.setCursor(0, 64);
+      oledDisplay.print(WiFi.localIP());
+    } while ( oledDisplay.nextPage() );
+    delay(5000);
+  } else {
+    // if WiFi not connected, switch to access point mode
+    WiFi.mode(WIFI_AP);
+    WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
+    WiFi.softAP(ssid_AP, password_AP);
+  }
+
+  // init webserver
+  server.begin();
+
+  // When the client requests data
+  server.on("/getHead", getHead);
+  server.on("/getValue", getValue);
+  server.on("/getRawValue", getRawValue);
+  server.on("/getParameter", getParameter);
+  server.on("/getWiFiNetworks", getWiFiNetworks);
+  server.on("/saveParameter", saveParameter);
+  server.on("/resetDefault", resetDefault);
+  server.on("/autoCalibrate", autoCalibrate);
+
+  // If the client requests any URI
+  server.onNotFound([]() {
+    if (!handleFileRead(server.uri()))
+      server.send(404, "text/plain", "404: Not Found");
+  });
+#endif
 }
 
 
@@ -477,7 +484,6 @@ void loop() {
   if (nLoadcells > 2) {
     LoadCell_3.update();
   }
-
 
   // update loadcell values
   if ((millis() - lastTimeLoadcell) > UPDATE_INTERVAL_LOADCELL) {
@@ -500,7 +506,6 @@ void loop() {
     weightLoadCell3 = weightLoadCell3 + SMOOTHING_LOADCELL3 * (lastWeightLoadCell3 - weightLoadCell3);
     lastWeightLoadCell3 = weightLoadCell3;
   }
-
 
   // update display and serial menu
   if ((millis() - lastTimeMenu) > UPDATE_INTERVAL_OLED_MENU) {
@@ -542,7 +547,6 @@ void loop() {
         pos_CG_length = 40;
       }
     }
-
 
     oledDisplay.firstPage();
     do {
@@ -602,43 +606,43 @@ void loop() {
             break;
           case MENU_LOADCELLS:
             nLoadcells = Serial.parseInt();
-            saveLoadcells();
+            EEPROM.put(P_NUMBER_LOADCELLS, nLoadcells);
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_DISTANCE_X1:
             distanceX1 = Serial.parseFloat();
-            saveDistanceX1();
+            EEPROM.put(P_DISTANCE_X1, distanceX1);
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_DISTANCE_X2:
             distanceX2 = Serial.parseFloat();
-            saveDistanceX2();
+            EEPROM.put(P_DISTANCE_X2, distanceX2);
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_DISTANCE_X3:
             distanceX3 = Serial.parseFloat();
-            saveDistanceX3();
+            EEPROM.put(P_DISTANCE_X3, distanceX3);
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_REF_WEIGHT:
             refWeight = Serial.parseFloat();
-            saveRefWeight();
+            EEPROM.put(P_REF_WEIGHT, refWeight);
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_REF_CG:
             refCG = Serial.parseFloat();
-            saveRefCG();
+            EEPROM.put(P_REF_CG, refCG);
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_AUTO_CALIBRATE:
             if (Serial.read() == 'J') {
-              auto_calibrate();
+              runAutoCalibrate();
               menuPage = 0;
               updateMenu = true;
             }
@@ -663,13 +667,13 @@ void loop() {
             break;
           case MENU_RESISTOR_R1:
             resistorR1 = Serial.parseFloat();
-            saveResistorR1();
+            EEPROM.put(P_RESISTOR_R1, resistorR1);
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_RESISTOR_R2:
             resistorR2 = Serial.parseFloat();
-            saveResistorR2();
+            EEPROM.put(P_RESISTOR_R2, resistorR2);
             menuPage = 0;
             updateMenu = true;
             break;
@@ -679,7 +683,7 @@ void loop() {
             } else {
               enableBatVolt = false;
             }
-            saveEnableBatVolt();
+            EEPROM.put(P_ENABLE_BATVOLT, enableBatVolt);
             menuPage = 0;
             updateMenu = true;
             break;
@@ -689,17 +693,8 @@ void loop() {
             updateMenu = true;
             break;
           case MENU_RESET_DEFAULT:
-            //chr = Serial.read();
             if (Serial.read() == 'J') {
-              // reset eeprom
-              for (int i = 0; i < EEPROM_SIZE; i++) {
-                EEPROM.write(i, 0xFF);
-              }
-              Serial.end();
-#if defined(ESP8266)
-              EEPROM.commit();
-#endif
-              resetCPU();
+              resetDefault();
             }
             menuPage = 0;
             updateMenu = true;
@@ -875,366 +870,196 @@ void loop() {
 
 
 #if defined(ESP8266)
-void main_page()
-{
-  char buff[8];
-  String webPage = "<!doctype html>";
-  webPage += "<html lang=\"en\">";
-  webPage += "<head>";
-  webPage += "<meta charset=\"utf-8\">";
-  webPage += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, shrink-to-fit=no\">";
-  webPage += "<meta name=\"description\" content=\"\">";
-  webPage += "<meta name=\"author\" content=\"\">";
-  webPage += "<link rel=\"icon\" href=\"/favicon.ico\">";
-  webPage += "<title>CG scale by M. Lehmann</title>";
-  webPage += "<link href=\"/bootstrap.min.css\" rel=\"stylesheet\">";
-  webPage += "<link href=\"navbar-top-fixed.css\" rel=\"stylesheet\">";
-  webPage += "<meta http-equiv=\"refresh\" content=\"";
-  webPage += REFRESH_TIME;
-  webPage += "\">";
-  webPage += "</head>";
-  webPage += "<body>";
-  webPage += "<nav class=\"navbar navbar-dark fixed-top bg-dark\">";
-  webPage += "<div class=\"container-fluid\">";
-  webPage += "<div class=\"navbar-header\">";
-  webPage += "<a class=\"navbar-brand\" href=\"#\">";
-  webPage += ssid;
-  webPage += "</a>";
-  webPage += "</div>";
-  webPage += "<ul class=\"nav navbar-nav navbar-right\">";
-  webPage += "<button type=\"button\" onclick=\"location.href = '/settings'\" class=\"btn btn-danger\">";
-  webPage += "<img src=\"settings.png\" alt=\"\" style=\"width:auto;height:30px\">";
-  webPage += "</button>";
-  webPage += "</ul>";
-  webPage += "</div>";
-  webPage += "</nav>";
-  webPage += "<br><br><br>";
-  webPage += "<main role=\"main\" class=\"container\">";
-  webPage += "<div class=\"jumbotron\">";
-  if (errMsgCnt == 0) {
-    // print weight
-    webPage += "<div class=\"container\">";
-    webPage += "<div class=\"row mt-3\">";
-    webPage += "<div class=\"col-xs-6\"><img src=\"weight.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
-    webPage += "<div class=\"col-xs-6 d-flex align-items-center\"><font size=\"6\"> ";
-    dtostrf(weightTotal, 5, 1, buff);
-    webPage += buff;
-    webPage += "g</div>";
-    webPage += "</div>";
-    webPage += "</div>";
 
-    // print cg
-    webPage += "<div class=\"container\">";
-    webPage += "<div class=\"row mt-3\">";
-    webPage += "<div class=\"col-xs-6\"><img src=\"cg.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
-    webPage += "<div class=\"col-xs-6 d-flex align-items-center\"><font size=\"6\"> ";
-    dtostrf(CG_length, 5, 1, buff);
-    webPage += buff;
-    webPage += "mm</div>";
-    webPage += "</div>";
-    webPage += "</div>";
-
-    // print cg trans
-    if (nLoadcells > 2) {
-      webPage += "<div class=\"container\">";
-      webPage += "<div class=\"row mt-3\">";
-      webPage += "<div class=\"col-xs-6\"><img src=\"cglr.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
-      webPage += "<div class=\"col-xs-6 d-flex align-items-center\"><font size=\"6\"> ";
-      dtostrf(CG_trans, 5, 1, buff);
-      webPage += buff;
-      webPage += "mm</div>";
-      webPage += "</div>";
-      webPage += "</div>";
-
-    }
-
-    // print battery
-    if (enableBatVolt) {
-      webPage += "<div class=\"container\">";
-      webPage += "<div class=\"row mt-3\">";
-      webPage += "<div class=\"col-xs-6\"><img src=\"battery.png\" class=\"pull-left mr-4\" alt=\"weight\" style=\"width:auto;height:50px\"></div>";
-      webPage += "<div class=\"col-xs-6 d-flex align-items-center\"><font size=\"6\"> ";
-      webPage += batVolt;
-      webPage += "V</div>";
-      webPage += "</div>";
-      webPage += "</div>";
-    }
-  } else {
-    webPage += "<div class=\"container\">";
-    webPage += "<font size=\"6\"> ";
-    for (int i = 1; i <= errMsgCnt; i++) {
-      webPage += errMsg[i];
-    }
-    webPage += "</div>";
+// send headvalues to client
+void getHead() {
+  String response = ssid_AP;
+  response += "&";
+  for (int i = 1; i <= errMsgCnt; i++) {
+    response += errMsg[i];
   }
-  webPage += "</div>";
-  webPage += "</main>";
-  webPage += "<p><font size=\"2\"><center>(c) 2019 M. Lehmann - Version: ";
-  webPage += CGSCALE_VERSION;
-  webPage += "</center></font></p>";
-  webPage += "<script src=\"/bootstrap.min.js\"></script>";
-  webPage += "</body>";
-  webPage += "</html>";
-
-  server.send(200, "text/html", webPage);
-
+  response += "&";
+  response += CGSCALE_VERSION;
+  server.send(200, "text/html", response);
 }
 
-void settings_page()
-{
-  if ( server.hasArg("nLoadcells")) {
-    nLoadcells = server.arg("nLoadcells").toFloat();
-    saveLoadcells();
+
+// send values to client
+void getValue() {
+  char buff[8];
+  String response = "";
+  dtostrf(weightTotal, 5, 1, buff);
+  response += buff;
+  response += "g&";
+  dtostrf(CG_length, 5, 1, buff);
+  response += buff;
+  response += "mm&";
+  dtostrf(CG_trans, 5, 1, buff);
+  response += buff;
+  response += "mm&";
+  dtostrf(batVolt, 5, 2, buff);
+  response += buff;
+  response += "V";
+  server.send(200, "text/html", response);
+}
+
+
+// send raw values to client
+void getRawValue() {
+  char buff[8];
+  String response = "";
+  dtostrf(weightLoadCell1, 5, 1, buff);
+  response += buff;
+  response += "g&";
+  dtostrf(weightLoadCell2, 5, 1, buff);
+  response += buff;
+  response += "g&";
+  dtostrf(weightLoadCell3, 5, 1, buff);
+  response += buff;
+  response += "g";
+  server.send(200, "text/html", response);
+}
+
+
+// send parameters to client
+void getParameter() {
+  String response = "";
+  response += nLoadcells;
+  response += "&";
+  response += distanceX1;
+  response += "&";
+  response += distanceX2;
+  response += "&";
+  response += distanceX3;
+  response += "&";
+  response += refWeight;
+  response += "&";
+  response += refCG;
+  response += "&";
+  response += calFactorLoadcell1;
+  response += "&";
+  response += calFactorLoadcell2;
+  response += "&";
+  response += calFactorLoadcell3;
+  response += "&";
+  response += resistorR1;
+  response += "&";
+  response += resistorR2;
+  response += "&";
+  if (enableBatVolt) {
+    response += "ON";
+  } else {
+    response += "OFF";
   }
-  if ( server.hasArg("distanceX1")) {
-    distanceX1 = server.arg("distanceX1").toFloat();
-    saveDistanceX1();
+  response += "&";
+  response += ssid_STA;
+  response += "&";
+  response += password_STA;
+  response += "&";
+  response += ssid_AP;
+  response += "&";
+  response += password_AP;
+  server.send(200, "text/html", response);
+}
+
+
+// send available WiFi networks to client
+void getWiFiNetworks() {
+  String response = "";
+  int n = WiFi.scanNetworks();
+  if (n > 0) {
+    for (int i = 0; i < n; ++i) {
+      response += WiFi.SSID(i);
+      if (i < n - 1) response += "&";
+    }
   }
-  if ( server.hasArg("distanceX2")) {
-    distanceX2 = server.arg("distanceX2").toFloat();
-    saveDistanceX2();
-  }
-  if ( server.hasArg("distanceX3")) {
-    distanceX3 = server.arg("distanceX3").toFloat();
-    saveDistanceX3();
-  }
-  if ( server.hasArg("refWeight")) {
-    refWeight = server.arg("refWeight").toFloat();
-    saveRefWeight();
-  }
-  if ( server.hasArg("refCG")) {
-    refCG = server.arg("refCG").toFloat();
-    saveRefCG();
-  }
-  if ( server.hasArg("calFactorLoadcell1")) {
-    calFactorLoadcell1 = server.arg("calFactorLoadcell1").toFloat();
-    saveCalFactor1();
-  }
-  if ( server.hasArg("calFactorLoadcell2")) {
-    calFactorLoadcell2 = server.arg("calFactorLoadcell2").toFloat();
-    saveCalFactor2();
-  }
-  if ( server.hasArg("calFactorLoadcell3")) {
-    calFactorLoadcell3 = server.arg("calFactorLoadcell3").toFloat();
-    saveCalFactor3();
-  }
-  if ( server.hasArg("resistorR1")) {
-    resistorR1 = server.arg("resistorR1").toFloat();
-    saveResistorR1();
-  }
-  if ( server.hasArg("resistorR2")) {
-    resistorR2 = server.arg("resistorR2").toFloat();
-    saveResistorR2();
-  }
-  if ( server.hasArg("enableBatVolt")) {
+  server.send(200, "text/html", response);
+}
+
+
+// save parameters
+void saveParameter() {
+  if (server.hasArg("nLoadcells")) nLoadcells = server.arg("nLoadcells").toFloat();
+  if (server.hasArg("distanceX1")) distanceX1 = server.arg("distanceX1").toFloat();
+  if (server.hasArg("distanceX2")) distanceX2 = server.arg("distanceX2").toFloat();
+  if (server.hasArg("distanceX3")) distanceX3 = server.arg("distanceX3").toFloat();
+  if (server.hasArg("refWeight")) refWeight = server.arg("refWeight").toFloat();
+  if (server.hasArg("refCG")) refCG = server.arg("refCG").toFloat();
+  if (server.hasArg("calFactorLoadcell1")) calFactorLoadcell1 = server.arg("calFactorLoadcell1").toFloat();
+  if (server.hasArg("calFactorLoadcell2")) calFactorLoadcell2 = server.arg("calFactorLoadcell2").toFloat();
+  if (server.hasArg("calFactorLoadcell3")) calFactorLoadcell3 = server.arg("calFactorLoadcell3").toFloat();
+  if (server.hasArg("resistorR1")) resistorR1 = server.arg("resistorR1").toFloat();
+  if (server.hasArg("resistorR2")) resistorR2 = server.arg("resistorR2").toFloat();
+  if (server.hasArg("enableBatVolt")) {
     if (server.arg("enableBatVolt") == "ON") {
       enableBatVolt = true;
     } else {
       enableBatVolt = false;
     }
   }
-  if ( server.hasArg("calibrate")) {
-    auto_calibrate();
+  if (server.hasArg("ssid_STA")) server.arg("ssid_STA").toCharArray(ssid_STA, MAX_SSID_PW_LENGHT + 1);
+  if (server.hasArg("password_STA")) server.arg("password_STA").toCharArray(password_STA, MAX_SSID_PW_LENGHT + 1);
+  if (server.hasArg("ssid_AP")) server.arg("ssid_AP").toCharArray(ssid_AP, MAX_SSID_PW_LENGHT + 1);
+  if (server.hasArg("password_AP")) server.arg("password_AP").toCharArray(password_AP, MAX_SSID_PW_LENGHT + 1);
+
+  EEPROM.put(P_NUMBER_LOADCELLS, nLoadcells);
+  EEPROM.put(P_DISTANCE_X1, distanceX1);
+  EEPROM.put(P_DISTANCE_X2, distanceX2);
+  EEPROM.put(P_DISTANCE_X3, distanceX3);
+  EEPROM.put(P_REF_WEIGHT, refWeight);
+  EEPROM.put(P_REF_CG, refCG);
+  saveCalFactor1();
+  saveCalFactor2();
+  saveCalFactor3();
+  EEPROM.put(P_RESISTOR_R1, resistorR1);
+  EEPROM.put(P_RESISTOR_R2, resistorR2);
+  EEPROM.put(P_ENABLE_BATVOLT, enableBatVolt);
+  EEPROM.put(P_SSID_STA, ssid_STA);
+  EEPROM.put(P_PASSWORD_STA, password_STA);
+  EEPROM.put(P_SSID_AP, ssid_AP);
+  EEPROM.put(P_PASSWORD_AP, password_AP);
+  EEPROM.commit();
+
+  server.send(200, "text/html", "ok");
+}
+
+
+// calibrate cg scale
+void autoCalibrate() {
+  while (!runAutoCalibrate());
+  server.send(200, "text/html", "ok");
+}
+
+
+// convert the file extension to the MIME type
+String getContentType(String filename) {
+  if (filename.endsWith(".html")) return "text/html";
+  else if (filename.endsWith(".png")) return "text/css";
+  else if (filename.endsWith(".css")) return "text/css";
+  else if (filename.endsWith(".js")) return "application/javascript";
+  else if (filename.endsWith(".map")) return "application/json";
+  else if (filename.endsWith(".ico")) return "image/x-icon";
+  else if (filename.endsWith(".gz")) return "application/x-gzip";
+  return "text/plain";
+}
+
+
+// send file to the client (if it exists)
+bool handleFileRead(String path) {
+  // If a folder is requested, send the index file
+  if (path.endsWith("/")) path += "index.html";
+  String contentType = getContentType(path);
+  String pathWithGz = path + ".gz";
+
+  // If the file exists, either as a compressed archive, or normal
+  if (SPIFFS.exists(pathWithGz) || SPIFFS.exists(path)) {
+    if (SPIFFS.exists(pathWithGz))
+      path += ".gz";
+    File file = SPIFFS.open(path, "r");
+    size_t sent = server.streamFile(file, contentType);
+    file.close();
+    return true;
   }
-
-
-  String webPage = "<!doctype html>";
-  webPage += "<html lang=\"en\">";
-  webPage += "<head>";
-  webPage += "<meta charset=\"utf-8\">";
-  webPage += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, shrink-to-fit=no\">";
-  webPage += "<meta name=\"description\" content=\"\">";
-  webPage += "<meta name=\"author\" content=\"\">";
-  webPage += "<link rel=\"icon\" href=\"/favicon.ico\">";
-  webPage += "<title>CG scale by M. Lehmann</title>";
-  webPage += "<link href=\"/bootstrap.min.css\" rel=\"stylesheet\">";
-  webPage += "<link href=\"navbar-top-fixed.css\" rel=\"stylesheet\">";
-  webPage += "</head>";
-  webPage += "<body>";
-  webPage += "<nav class=\"navbar navbar-dark fixed-top bg-dark\">";
-  webPage += "<div class=\"container-fluid\">";
-  webPage += "<div class=\"navbar-header\">";
-  webPage += "<a class=\"navbar-brand\" href=\"#\">";
-  webPage += ssid;
-  webPage += "</a>";
-  webPage += "</div>";
-  webPage += "<ul class=\"nav navbar-nav navbar-right\">";
-  webPage += "<button type=\"button\" onclick=\"location.href = '/'\" class=\"btn btn-danger\">Home</button>";
-  webPage += "</ul>";
-  webPage += "</div>";
-  webPage += "</nav>";
-  webPage += "<br><br><br>";
-  webPage += "<main role=\"main\" class=\"container\">";
-
-  webPage += "<form action=\"/settings\" id=\"saveForm\">";
-  webPage += "<div class=\"form-group\">";
-  webPage += "<label>Number of load cells:</label>";
-  webPage += "<select class=\"form-control\" name=\"nLoadcells\">";
-  if (nLoadcells == 2) {
-    webPage += "<option selected>2</option>";
-    webPage += "<option>3</option>";
-  }
-  if (nLoadcells == 3) {
-    webPage += "<option>2</option>";
-    webPage += "<option selected>3</option>";
-  }
-  webPage += "</select>";
-  webPage += "</div>";
-
-  webPage += "<div class=\"form-group\">";
-  webPage += "<label>Distance X1 [mm]:</label>";
-  webPage += "<input type=\"text\" class=\"form-control\" name=\"distanceX1\" value=\"";
-  webPage += distanceX1;
-  webPage += "\">";
-  webPage += "</div>";
-
-  webPage += "<div class=\"form-group\">";
-  webPage += "<label>Distance X2 [mm]:</label>";
-  webPage += "<input type=\"text\" class=\"form-control\" name=\"distanceX2\" value=\"";
-  webPage += distanceX2;
-  webPage += "\">";
-  webPage += "</div>";
-
-  webPage += "<div class=\"form-group\">";
-  webPage += "<label>Distance X3 [mm]:</label>";
-  webPage += "<input type=\"text\" class=\"form-control\" name=\"distanceX3\" value=\"";
-  webPage += distanceX3;
-  webPage += "\">";
-  webPage += "</div>";
-
-  webPage += "<div class=\"form-group\">";
-  webPage += "<label>Reference weight [g]:</label>";
-  webPage += "<input type=\"text\" class=\"form-control\" name=\"refWeight\" value=\"";
-  webPage += refWeight;
-  webPage += "\">";
-  webPage += "</div>";
-
-  webPage += "<div class=\"form-group\">";
-  webPage += "<label>Reference CG [mm]:</label>";
-  webPage += "<input type=\"text\" class=\"form-control\" name=\"refCG\" value=\"";
-  webPage += refCG;
-  webPage += "\">";
-  webPage += "</div>";
-
-  webPage += "<div class=\"form-group\">";
-  webPage += "<label>Calibration factor of load cell 1:</label>";
-  webPage += "<input type=\"text\" class=\"form-control\" name=\"calFactorLoadcell1\" value=\"";
-  webPage += calFactorLoadcell1;
-  webPage += "\">";
-  webPage += "</div>";
-
-  webPage += "<div class=\"form-group\">";
-  webPage += "<label>Calibration factor of load cell 2:</label>";
-  webPage += "<input type=\"text\" class=\"form-control\" name=\"calFactorLoadcell2\" value=\"";
-  webPage += calFactorLoadcell2;
-  webPage += "\">";
-  webPage += "</div>";
-
-  webPage += "<div class=\"form-group\">";
-  webPage += "<label>Calibration factor of load cell 3:</label>";
-  webPage += "<input type=\"text\" class=\"form-control\" name=\"calFactorLoadcell3\" value=\"";
-  webPage += calFactorLoadcell3;
-  webPage += "\">";
-  webPage += "</div>";
-
-  webPage += "<div class=\"form-group\">";
-  webPage += "<label>Value of resistor R1 [ohm]:</label>";
-  webPage += "<input type=\"text\" class=\"form-control\" name=\"resistorR1\" value=\"";
-  webPage += resistorR1;
-  webPage += "\">";
-  webPage += "</div>";
-
-  webPage += "<div class=\"form-group\">";
-  webPage += "<label>Value of resistor R2 [ohm]:</label>";
-  webPage += "<input type=\"text\" class=\"form-control\" name=\"resistorR2\" value=\"";
-  webPage += resistorR2;
-  webPage += "\">";
-  webPage += "</div>";
-
-  webPage += "<div class=\"form-group\">";
-  webPage += "<label>Voltage measurement:</label>";
-  webPage += "<select class=\"form-control\" name=\"enableBatVolt\">";
-  if (enableBatVolt) {
-    webPage += "<option selected>ON</option>";
-    webPage += "<option>OFF</option>";
-  } else {
-    webPage += "<option>ON</option>";
-    webPage += "<option selected>OFF</option>";
-  }
-  webPage += "</select>";
-  webPage += "</div>";
-
-  webPage += "</form>";
-
-  webPage += "<div class=\"btn-group btn-group-lg\">";
-  webPage += "<button type=\"button submit\" class=\"btn btn-success btn-lg\" form=\"saveForm\">save parameters</button>";
-  webPage += "<form action=\"/settings\" method=\"POST\"><button type=\"button submit\" class=\"btn btn-primary btn-lg\" name=\"calibrate\" value=\"1\">auto calibrate</button></form>";
-  webPage += "</div>";
-
-  webPage += "<img src=\"CG_scale_mechanics.png\" class=\"pull-left mr-4\" alt=\"mechanics\" style=\"width:100%\">";
-
-  webPage += "</main>";
-  webPage += "<p><font size=\"2\"><center>(c) 2019 M. Lehmann - Version: ";
-  webPage += CGSCALE_VERSION;
-  webPage += "</center></font></p>";
-  webPage += "<script src=\"/bootstrap.min.js\"></script>";
-  webPage += "</body>";
-  webPage += "</html>";
-
-  server.send(200, "text/html", webPage);
-}
-
-void settingsImg()
-{
-  File file = SPIFFS.open("/settings.png", "r");
-  size_t sent = server.streamFile(file, "text/css");
-}
-
-void weightImg()
-{
-  File file = SPIFFS.open("/weight.png", "r");
-  size_t sent = server.streamFile(file, "text/css");
-}
-
-void cgImg()
-{
-  File file = SPIFFS.open("/cg.png", "r");
-  size_t sent = server.streamFile(file, "text/css");
-}
-
-void cgLRimg()
-{
-  File file = SPIFFS.open("/cglr.png", "r");
-  size_t sent = server.streamFile(file, "text/css");
-}
-
-void batteryImg()
-{
-  File file = SPIFFS.open("/battery.png", "r");
-  size_t sent = server.streamFile(file, "text/css");
-}
-
-void mechanicsImg()
-{
-  File file = SPIFFS.open("/CG_scale_mechanics.png", "r");
-  size_t sent = server.streamFile(file, "text/css");
-}
-
-void bootstrap()
-{
-  File file = SPIFFS.open("/bootstrap.min.css.gz", "r");
-  size_t sent = server.streamFile(file, "text/css");
-}
-
-void popper()
-{
-  File file = SPIFFS.open("/popper.min.js.gz", "r");
-  size_t sent = server.streamFile(file, "application/javascript");
-}
-
-void bootstrapmin()
-{
-  File file = SPIFFS.open("/bootstrap.min.js.gz", "r");
-  size_t sent = server.streamFile(file, "application/javascript");
+  return false;
 }
 #endif
