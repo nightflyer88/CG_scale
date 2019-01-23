@@ -4,7 +4,7 @@
                       (c) 2019 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "1.0.58"
+#define CGSCALE_VERSION "1.0.62"
 /*
 
   ******************************************************************
@@ -58,6 +58,7 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
+#include <ArduinoJson.h>
 #endif
 
 // load settings
@@ -76,6 +77,7 @@ HX711_ADC LoadCell_3(PIN_LOADCELL3_DOUT, PIN_LOADCELL3_PD_SCK);
 #if defined(ESP8266)
 ESP8266WebServer server(80);
 IPAddress apIP(ip[0], ip[1], ip[2], ip[3]);
+File fsUploadFile;              // a File object to temporarily store the received file
 #endif
 
 // serial menu
@@ -119,7 +121,8 @@ enum {
   P_PASSWORD_STA =                      P_SSID_STA + MAX_SSID_PW_LENGHT + 1,
   P_SSID_AP =                           P_PASSWORD_STA + MAX_SSID_PW_LENGHT + 1,
   P_PASSWORD_AP =                       P_SSID_AP + MAX_SSID_PW_LENGHT + 1,
-  EEPROM_SIZE =                         P_PASSWORD_AP + MAX_SSID_PW_LENGHT + 1
+  P_MODELNAME =                         P_PASSWORD_AP + MAX_SSID_PW_LENGHT + 1,
+  EEPROM_SIZE =                         P_MODELNAME + MAX_MODELNAME_LENGHT + 1
 #endif
 };
 
@@ -195,42 +198,40 @@ bool updateMenu = true;
 int menuPage = 0;
 String errMsg[5] = "";
 int errMsgCnt = 0;
+#if defined(ESP8266)
+char curModelName[MAX_MODELNAME_LENGHT + 1] = "";
+#endif
 
 
 // Restart CPU
 void(* resetCPU) (void) = 0;
 
 
-// reset to factory defaults
-void resetDefault() {
-  // reset eeprom
-  for (int i = 0; i < EEPROM_SIZE; i++) {
-    EEPROM.write(i, 0xFF);
-  }
-  Serial.end();
-#if defined(ESP8266)
-  EEPROM.commit();
-#endif
-  resetCPU();
-}
-
-
 // save calibration factor
 void saveCalFactor1() {
   LoadCell_1.setCalFactor(calFactorLoadcell1);
   EEPROM.put(P_LOADCELL1_CALIBRATION_FACTOR, calFactorLoadcell1);
+#if defined(ESP8266)
+  EEPROM.commit();
+#endif
 }
 
 
 void saveCalFactor2() {
   LoadCell_2.setCalFactor(calFactorLoadcell2);
   EEPROM.put(P_LOADCELL2_CALIBRATION_FACTOR, calFactorLoadcell2);
+#if defined(ESP8266)
+  EEPROM.commit();
+#endif
 }
 
 
 void saveCalFactor3() {
   LoadCell_3.setCalFactor(calFactorLoadcell3);
   EEPROM.put(P_LOADCELL3_CALIBRATION_FACTOR, calFactorLoadcell3);
+#if defined(ESP8266)
+  EEPROM.commit();
+#endif
 }
 
 
@@ -269,6 +270,7 @@ void setup() {
   Serial.begin(9600);
 
 #if defined(ESP8266)
+  // init filesystem
   SPIFFS.begin();
   EEPROM.begin(EEPROM_SIZE);
 #endif
@@ -339,11 +341,21 @@ void setup() {
     EEPROM.get(P_PASSWORD_AP, password_AP);
   }
 
+  if (EEPROM.read(P_MODELNAME) != 0xFF) {
+    EEPROM.get(P_MODELNAME, curModelName);
+  }
+
+  // load current model
+  if (!openModelJson(curModelName)) {
+    curModelName[0] = '\0';
+  }
+
   // Start by connecting to a WiFi network
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid_STA, password_STA);
 
   long timeoutWiFi = millis();
+
 #endif
 
   // init OLED display
@@ -379,7 +391,7 @@ void setup() {
   while ((loadcell_1_rdy + loadcell_2_rdy + loadcell_3_rdy) < 3) {
     loadcell_1_rdy = LoadCell_1.startMultiple(STABILISINGTIME);
     loadcell_2_rdy = LoadCell_2.startMultiple(STABILISINGTIME);
-    if (nLoadcells > 2) {
+    if (nLoadcells == 3) {
       loadcell_3_rdy = LoadCell_3.startMultiple(STABILISINGTIME);
     } else {
       loadcell_3_rdy = 1;
@@ -465,8 +477,15 @@ void setup() {
   server.on("/getParameter", getParameter);
   server.on("/getWiFiNetworks", getWiFiNetworks);
   server.on("/saveParameter", saveParameter);
-  server.on("/resetDefault", resetDefault);
   server.on("/autoCalibrate", autoCalibrate);
+  server.on("/saveModel", saveModel);
+  server.on("/openModel", openModel);
+  server.on("/deleteModel", deleteModel);
+
+  // When the client upload file
+  server.on("/models.html", HTTP_POST, []() {
+    server.send(200, "text/plain", "");
+  }, handleFileUpload);
 
   // If the client requests any URI
   server.onNotFound([]() {
@@ -607,36 +626,54 @@ void loop() {
           case MENU_LOADCELLS:
             nLoadcells = Serial.parseInt();
             EEPROM.put(P_NUMBER_LOADCELLS, nLoadcells);
+#if defined(ESP8266)
+            EEPROM.commit();
+#endif
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_DISTANCE_X1:
             distanceX1 = Serial.parseFloat();
             EEPROM.put(P_DISTANCE_X1, distanceX1);
+#if defined(ESP8266)
+            EEPROM.commit();
+#endif
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_DISTANCE_X2:
             distanceX2 = Serial.parseFloat();
             EEPROM.put(P_DISTANCE_X2, distanceX2);
+#if defined(ESP8266)
+            EEPROM.commit();
+#endif
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_DISTANCE_X3:
             distanceX3 = Serial.parseFloat();
             EEPROM.put(P_DISTANCE_X3, distanceX3);
+#if defined(ESP8266)
+            EEPROM.commit();
+#endif
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_REF_WEIGHT:
             refWeight = Serial.parseFloat();
             EEPROM.put(P_REF_WEIGHT, refWeight);
+#if defined(ESP8266)
+            EEPROM.commit();
+#endif
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_REF_CG:
             refCG = Serial.parseFloat();
             EEPROM.put(P_REF_CG, refCG);
+#if defined(ESP8266)
+            EEPROM.commit();
+#endif
             menuPage = 0;
             updateMenu = true;
             break;
@@ -668,12 +705,18 @@ void loop() {
           case MENU_RESISTOR_R1:
             resistorR1 = Serial.parseFloat();
             EEPROM.put(P_RESISTOR_R1, resistorR1);
+#if defined(ESP8266)
+            EEPROM.commit();
+#endif
             menuPage = 0;
             updateMenu = true;
             break;
           case MENU_RESISTOR_R2:
             resistorR2 = Serial.parseFloat();
             EEPROM.put(P_RESISTOR_R2, resistorR2);
+#if defined(ESP8266)
+            EEPROM.commit();
+#endif
             menuPage = 0;
             updateMenu = true;
             break;
@@ -684,6 +727,9 @@ void loop() {
               enableBatVolt = false;
             }
             EEPROM.put(P_ENABLE_BATVOLT, enableBatVolt);
+#if defined(ESP8266)
+            EEPROM.commit();
+#endif
             menuPage = 0;
             updateMenu = true;
             break;
@@ -694,7 +740,19 @@ void loop() {
             break;
           case MENU_RESET_DEFAULT:
             if (Serial.read() == 'J') {
-              resetDefault();
+              // reset eeprom
+              for (int i = 0; i < EEPROM_SIZE; i++) {
+                EEPROM.write(i, 0xFF);
+              }
+              Serial.end();
+#if defined(ESP8266)
+              EEPROM.commit();
+              // delete json model file
+              if (SPIFFS.exists(MODEL_FILE)) {
+                SPIFFS.remove(MODEL_FILE);
+              }
+#endif
+              resetCPU();
             }
             menuPage = 0;
             updateMenu = true;
@@ -923,7 +981,30 @@ void getRawValue() {
 
 // send parameters to client
 void getParameter() {
+  char buff[8];
   String response = "";
+  float weightTotal_saved = 0;
+  float CG_length_saved = 0;
+  float CG_trans_saved = 0;
+
+  StaticJsonBuffer<JSONBUFFER_SIZE> jsonBuffer;
+  //DynamicJsonBuffer  jsonBuffer(JSONBUFFER_SIZE);
+
+  if (SPIFFS.exists(MODEL_FILE)) {
+    // read json file
+    File f = SPIFFS.open(MODEL_FILE, "r");
+    JsonObject& root = jsonBuffer.parseObject(f);
+    f.close();
+    // check if model exists
+    if (root.success() && root.containsKey(curModelName)) {
+      JsonObject& object = root[curModelName];
+      weightTotal_saved = object["wt"];
+      CG_length_saved = object["cg"];
+      CG_trans_saved = object["cglr"];
+    }
+  }
+
+  // parameter list
   response += nLoadcells;
   response += "&";
   response += distanceX1;
@@ -959,6 +1040,18 @@ void getParameter() {
   response += ssid_AP;
   response += "&";
   response += password_AP;
+  response += "&";
+  response += curModelName;
+  response += "&";
+  dtostrf(weightTotal_saved, 5, 1, buff);
+  response += buff;
+  response += "g&";
+  dtostrf(CG_length_saved, 5, 1, buff);
+  response += buff;
+  response += "mm&";
+  dtostrf(CG_trans_saved, 5, 1, buff);
+  response += buff;
+  response += "mm";
   server.send(200, "text/html", response);
 }
 
@@ -1020,14 +1113,53 @@ void saveParameter() {
   EEPROM.put(P_PASSWORD_AP, password_AP);
   EEPROM.commit();
 
-  server.send(200, "text/html", "ok");
+  // save current model to json
+  saveModelJson(curModelName);
+
+  server.send(200, "text/plain", "saved");
 }
 
 
 // calibrate cg scale
 void autoCalibrate() {
   while (!runAutoCalibrate());
-  server.send(200, "text/html", "ok");
+  server.send(200, "text/plain", "parameters saved");
+}
+
+
+// save new model
+void saveModel() {
+  if (server.hasArg("modelname")) {
+    if (saveModelJson(server.arg("modelname"))) {
+      server.send(200, "text/plain", "saved");
+      return;
+    }
+  }
+  server.send(404, "text/plain", "404: Save model failed !");
+}
+
+
+// open model
+void openModel() {
+  if (server.hasArg("modelname")) {
+    if (openModelJson(server.arg("modelname"))) {
+      server.send(200, "text/plain", "opened");
+      return;
+    }
+  }
+  server.send(404, "text/plain", "404: Open model failed !");
+}
+
+
+// delete model
+void deleteModel() {
+  if (server.hasArg("modelname")) {
+    if (deleteModelJson(server.arg("modelname"))) {
+      server.send(200, "text/plain", "deleted");
+      return;
+    }
+  }
+  server.send(404, "text/plain", "404: Delete model failed !");
 }
 
 
@@ -1046,6 +1178,7 @@ String getContentType(String filename) {
 
 // send file to the client (if it exists)
 bool handleFileRead(String path) {
+
   // If a folder is requested, send the index file
   if (path.endsWith("/")) path += "index.html";
   String contentType = getContentType(path);
@@ -1060,6 +1193,175 @@ bool handleFileRead(String path) {
     file.close();
     return true;
   }
+
   return false;
+}
+
+
+// upload a new file to the SPIFFS
+void handleFileUpload() {
+
+  HTTPUpload& upload = server.upload();
+
+  if (upload.status == UPLOAD_FILE_START) {
+    String filename = upload.filename;
+    if (!filename.startsWith("/")) filename = "/" + filename;
+    if (filename != MODEL_FILE ) server.send(500, "text/plain", "wrong file !");
+    // Open the file for writing in SPIFFS (create if it doesn't exist)
+    fsUploadFile = SPIFFS.open(filename, "w");
+    filename = String();
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    // Write the received bytes to the file
+    fsUploadFile.write(upload.buf, upload.currentSize);
+  } else if (upload.status == UPLOAD_FILE_END) {
+    // If the file was successfully created
+    if (fsUploadFile) {
+      fsUploadFile.close();
+      // Redirect the client to the success page
+      server.sendHeader("Location", "/models.html");
+      server.send(303);
+    } else {
+      server.send(500, "text/plain", "500: couldn't create file");
+    }
+  }
+
+}
+
+
+// save model to json file
+bool saveModelJson(String modelName) {
+
+  if (modelName.length() > MAX_MODELNAME_LENGHT) {
+    return false;
+  }
+
+  StaticJsonBuffer<JSONBUFFER_SIZE> jsonBuffer;
+  //DynamicJsonBuffer  jsonBuffer(JSONBUFFER_SIZE);
+
+  if (SPIFFS.exists(MODEL_FILE)) {
+    // read json file
+    File f = SPIFFS.open(MODEL_FILE, "r");
+    JsonObject& root = jsonBuffer.parseObject(f);
+    f.close();
+    if (!root.success()) {
+      return false;
+    }
+    // check if model exists
+    if (root.containsKey(modelName)) {
+      writeModelData(root[modelName]);
+    } else {
+      // otherwise create new
+      writeModelData(root.createNestedObject(modelName));
+    }
+    // write to file
+    if (root.success()) {
+      f = SPIFFS.open(MODEL_FILE, "w");
+      root.printTo(f);
+      f.close();
+    } else {
+      return false;
+    }
+  } else {
+    // creat new json
+    JsonObject& root = jsonBuffer.createObject();
+    writeModelData(root.createNestedObject(modelName));
+    // write to file
+    if (root.success()) {
+      File f = SPIFFS.open(MODEL_FILE, "w");
+      root.printTo(f);
+      f.close();
+    } else {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+
+// read model data from json file
+bool openModelJson(String modelName) {
+
+  StaticJsonBuffer<JSONBUFFER_SIZE> jsonBuffer;
+  //DynamicJsonBuffer  jsonBuffer(JSONBUFFER_SIZE);
+
+  if (SPIFFS.exists(MODEL_FILE)) {
+    // read json file
+    File f = SPIFFS.open(MODEL_FILE, "r");
+    JsonObject& root = jsonBuffer.parseObject(f);
+    f.close();
+    if (!root.success()) {
+      return false;
+    }
+    // check if model exists
+    if (root.containsKey(modelName)) {
+      JsonObject& object = root[modelName];
+      // load parameters from model
+      distanceX1 = object["x1"];
+      distanceX2 = object["x2"];
+      distanceX3 = object["x3"];
+    } else {
+      return false;
+    }
+
+    // save current model name to eeprom
+    modelName.toCharArray(curModelName, MAX_MODELNAME_LENGHT + 1);
+    EEPROM.put(P_MODELNAME, curModelName);
+    EEPROM.commit();
+
+    return true;
+  }
+
+  return false;
+}
+
+
+// delete model from json file
+bool deleteModelJson(String modelName) {
+
+  StaticJsonBuffer<JSONBUFFER_SIZE> jsonBuffer;
+  //DynamicJsonBuffer  jsonBuffer(JSONBUFFER_SIZE);
+
+  if (SPIFFS.exists(MODEL_FILE)) {
+    // read json file
+    File f = SPIFFS.open(MODEL_FILE, "r");
+    JsonObject& root = jsonBuffer.parseObject(f);
+    f.close();
+    if (!root.success()) {
+      return false;
+    }
+    // check if model exists
+    if (root.containsKey(modelName)) {
+      root.remove(modelName);
+    } else {
+      return false;
+    }
+    // if no models in json, kill it
+    if (root.size() == 0) {
+      SPIFFS.remove(MODEL_FILE);
+    } else {
+      // write to file
+      if (root.success()) {
+        File f = SPIFFS.open(MODEL_FILE, "w");
+        root.printTo(f);
+        f.close();
+      } else {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return false;
+
+}
+
+void writeModelData(JsonObject& object) {
+  object["wt"] = weightTotal;
+  object["cg"] = CG_length;
+  object["cglr"] = CG_trans;
+  object["x1"] = distanceX1;
+  object["x2"] = distanceX2;
+  object["x3"] = distanceX3;
 }
 #endif

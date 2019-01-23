@@ -11,6 +11,8 @@
     <script>
         var CG_trans_visible = true;
         var batVolt_visible = true;
+        var curModelName = "";
+        
         function getHead(){
             var request = new XMLHttpRequest();
             request.onreadystatechange = function(){
@@ -34,6 +36,7 @@
                     if(this.responseText != null){
                         var responseString = this.responseText;
                         var value = responseString.split("&");
+                        
                         if(value[0] == "2"){
                             CG_trans_visible = false;
                             document.getElementById("cglrContainer").outerHTML = "";
@@ -41,6 +44,16 @@
                         if(value[11] == "OFF"){
                             batVolt_visible = false;
                             document.getElementById("batContainer").outerHTML = "";
+                        }
+                        curModelName = value[16];
+                        if (curModelName != "") {
+                            document.getElementById("modelName").innerHTML = curModelName;
+                            document.getElementById("saveButton").classList.remove('disabled');
+                            document.getElementById("weightTotalSaved").innerHTML = value[17];
+                            document.getElementById("CG_lengthSaved").innerHTML = value[18];
+                            if(CG_trans_visible == true){
+                                document.getElementById("CG_transSaved").innerHTML = value[19];
+                            }
                         }
                     }
                 }
@@ -56,7 +69,7 @@
                         var responseString = this.responseText;
                         var value = responseString.split("&");
                         document.getElementById("weightTotal").innerHTML = value[0];
-                        document.getElementById("CG_length").innerHTML = value[1];
+                        document.getElementById("CG_length").innerHTML = value[1];                        
                         if(CG_trans_visible == true){
                             document.getElementById("CG_trans").innerHTML = value[2];
                         }
@@ -70,55 +83,98 @@
             request.send();
             setTimeout('getValue()', 1000);
         }
+        function saveModel(){
+            if (curModelName != "") {
+                var request = new XMLHttpRequest();
+                request.onreadystatechange = function(){
+                    if(this.readyState == 4 && this.status == 200){
+                        alert(curModelName + " saved");
+                        location.reload();
+                    }else if(this.readyState == 4 && this.status == 404){
+                        alert("Model not saved !");
+                    }
+                }
+                request.open("GET", "saveModel?modelname=" + curModelName, true);
+                request.send();
+            }
+        }
     </script>
 </head>
-<body onload=getValue()>
-    <script>        
-        getHead();
-        getParameter();
-    </script>
+<body>
     <nav class="navbar navbar-dark fixed-top bg-dark">
         <div class="container-fluid">
             <div class="navbar-header">
-                <a class="navbar-brand" href="#"><span id="ssid"></span></a>"
+                <a class="navbar-brand" href="#"><span id="ssid"></span></a>
             </div>
             <ul class="nav navbar-nav navbar-right">
-                <button type="button" onclick="location.href = '/settings.html'" class="btn btn-danger">
-                    <img src="settings.png" alt="" style="width:auto;height:30px">
-                </button>
+                <form class="form-inline">            
+                    <button type="button" onclick="location.href = '/models.html'" class="btn btn-primary navbar-btn mx-2">
+                        <img src="airplane.png" alt="" style="width:auto;height:30px">
+                        <span id="modelName"></span>
+                    </button>
+                    <button type="button" onclick="location.href = '/settings.html'" class="btn btn-danger navbar-btn">
+                        <img src="settings.png" alt="" style="width:auto;height:30px">
+                    </button>
+                </form>
             </ul>
         </div>
     </nav>
-    <br><br><br>
-    <main role="main" class="container">
+    <main role="main" class="container" style="margin-top:100px">
         <div class="jumbotron">
             <div class="container" id="wgContainer">
                 <div class="row mt-3">
                     <div class="col-xs-6"><img src="weight.png" class="pull-left mr-4" alt="Weight" style="width:auto;height:50px"></div>
-                    <div class="col-xs-6 d-flex align-items-center"><font size="6"><span id="weightTotal">-</span></font></div>
+                    <div class="col-xs-6 d-flex align-items-center">
+                        <font size="6">
+                            <span class="ml-4 mr-4" id="weightTotal">-</span>
+                        </font>
+                        <small class="form-text text-muted" id="weightTotalSaved"></small>
+                    </div>
                 </div>
             </div>
             <div class="container" id="cgContainer">
                 <div class="row mt-3">
                     <div class="col-xs-6"><img src="cg.png" class="pull-left mr-4" alt="CG" style="width:auto;height:50px"></div>
-                    <div class="col-xs-6 d-flex align-items-center"><font size="6"><span id="CG_length">-</span></font></div>
+                    <div class="col-xs-6 d-flex align-items-center">
+                        <font size="6">
+                            <span class="ml-4 mr-4" id="CG_length">-</span>
+                        </font>
+                        <small class="form-text text-muted" id="CG_lengthSaved"></small>
+                    </div>
                 </div>
             </div> 
             <div class="container" id="cglrContainer">
                 <div class="row mt-3">
                     <div class="col-xs-6"><img src="cglr.png" class="pull-left mr-4" alt="CG left/right" style="width:auto;height:50px"></div>
-                    <div class="col-xs-6 d-flex align-items-center"><font size="6"><span id="CG_trans">-</span></font></div>
+                    <div class="col-xs-6 d-flex align-items-center">
+                        <font size="6">
+                            <span class="ml-4 mr-4" id="CG_trans">-</span>
+                        </font>
+                        <small class="form-text text-muted" id="CG_transSaved"></small>
+                    </div>
                 </div>
             </div> 
             <div class="container" id="batContainer">
                 <div class="row mt-3">
                     <div class="col-xs-6"><img src="battery.png" class="pull-left mr-4" alt="Battery" style="width:auto;height:50px"></div>
-                    <div class="col-xs-6 d-flex align-items-center"><font size="6"><span id="batVolt">-</span></font></div>
+                    <div class="col-xs-6 d-flex align-items-center">
+                        <font size="6">
+                            <span class="ml-4 mr-4" id="batVolt">-</span>
+                        </font>
+                    </div>
                 </div>
             </div>
             <div class="container"><font size="6"><span id="errMsg"></span></font></div>
         </div>
+        <div class="text-center">
+            <button class="btn btn-success btn-lg disabled" onclick="saveModel()" id="saveButton">Save</button>
+        </div>
     </main>
     <p><font size="2"><center>(c) 2019 M. Lehmann - Version: <span id="cgscaleVersion">0.0</span></center></font></p>
+    <script>        
+        getHead();
+        getParameter();
+        getValue();
+    </script>
 </body>
 </html>

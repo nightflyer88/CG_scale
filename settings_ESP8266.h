@@ -137,3 +137,10 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NON
 #define SSID_AP                     "CG scale"
 #define PASSWORD_AP                 ""
 const char ip[4] =                  {1,1,1,1};    // default IP address
+
+
+// **** Model memory settings ****
+
+#define MAX_MODELNAME_LENGHT        15               // max chars 
+#define MODEL_FILE                  "/models.json"   // file to store models
+#define JSONBUFFER_SIZE             20000            // max file size in bytes

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="author" content="M. Lehmann">
+    <title>CG scale by M. Lehmann</title>
+    <link href="/bootstrap.min.css" rel="stylesheet">
+    <script src="/bootstrap.min.js"></script>
+    <script src="/jquery-3.3.1.slim.min.js"></script>
+    <script>
+        var CG_trans_visible = true;
+        var curModelName = "";
+        
+        function getHead(){
+            var request = new XMLHttpRequest();
+            request.onreadystatechange = function(){
+                if(this.readyState == 4 && this.status == 200){
+                    if(this.responseText != null){
+                        var responseString = this.responseText;
+                        var value = responseString.split("&");
+                        document.getElementById("ssid").innerHTML = value[0];
+                        document.getElementById("cgscaleVersion").innerHTML = value[2];
+                    }
+                }
+            }
+            request.open("GET", "getHead", true);
+            request.send();
+        }
+        function getParameter(){
+            var request = new XMLHttpRequest();
+            request.onreadystatechange = function(){
+                if(this.readyState == 4 && this.status == 200){
+                    if(this.responseText != null){
+                        var responseString = this.responseText;
+                        var value = responseString.split("&");
+                        if(value[0] == "2"){
+                            CG_trans_visible = false;
+                        }
+                        curModelName = value[16];
+                    }
+                }
+            }
+            request.open("GET", "getParameter", true);
+            request.send();
+        }
+        function getModels(){
+            var request = new XMLHttpRequest();
+            request.onreadystatechange = function(){
+                if(this.readyState == 4 && this.status == 200){
+                    var root = JSON.parse(this.responseText);
+                    var table = document.getElementById("models");
+                    if(CG_trans_visible == false){
+                        document.getElementById("cgLRrow").outerHTML = "";
+                        
+                    }
+                    for (name in root) {
+                        var row = table.insertRow();
+                        var cellName = row.insertCell(0);
+                        var cellWeight = row.insertCell(1);
+                        var cellCG = row.insertCell(2);
+                        cellName.innerHTML = name;
+                        cellWeight.innerHTML = root[name].wt;
+                        cellCG.innerHTML = root[name].cg;
+                        if(CG_trans_visible == true){
+                            var cellcglr = row.insertCell(3);
+                            var cellButton = row.insertCell(4);
+                            cellcglr.innerHTML = root[name].cglr;
+                        }else{
+                            var cellButton = row.insertCell(3);
+                        }
+                        if(name != curModelName){
+                            var htmlbutton = '<div class="btn-group"><button type="button" onclick="openModel(\'';
+                            htmlbutton += name;
+                            htmlbutton += '\')" class="btn btn-success">Open</button><button type="button" onclick="deleteModel(\'';
+                            htmlbutton += name;
+                            htmlbutton += '\')" class="btn btn-danger">Delete</button></div>';
+                            cellButton.innerHTML = htmlbutton;
+                        }else{
+                            row.setAttribute("class", "table-active");
+                        }
+                    }
+                }else if(this.readyState == 4 && this.status == 404){
+                    document.getElementById("backup").outerHTML = "";
+                    //alert("No models saved !");
+                }
+            }
+            request.open("GET", "models.json", true);
+            request.send();
+        }
+        function saveModel(){
+            var modelname = prompt("Please enter new model name:");
+            if (modelname != "") {
+                var request = new XMLHttpRequest();
+                request.onreadystatechange = function(){
+                    if(this.readyState == 4 && this.status == 200){
+                        location.reload();
+                    }else if(this.readyState == 4 && this.status == 404){
+                        alert("Model not saved !");
+                    }
+                }
+                request.open("GET", "saveModel?modelname=" + modelname, true);
+                request.send();
+            }
+        }
+        function openModel(modelname){
+            if (modelname != "") {
+                var request = new XMLHttpRequest();
+                request.onreadystatechange = function(){
+                    if(this.readyState == 4 && this.status == 200){
+                        location.reload();
+                    }else if(this.readyState == 4 && this.status == 404){
+                        alert("Model not open !");
+                    }
+                }
+                request.open("GET", "openModel?modelname=" + modelname, true);
+                request.send();
+            }
+        }
+        function deleteModel(modelname){
+            if (modelname != "" && confirm("Do you want to delete: " + modelname + "?")){
+                var request = new XMLHttpRequest();
+                request.onreadystatechange = function(){
+                    if(this.readyState == 4 && this.status == 200){
+                        location.reload();
+                    }else if(this.readyState == 4 && this.status == 404){
+                        alert("Model not deleted !");
+                    }
+                }
+                request.open("GET", "deleteModel?modelname=" + modelname, true);
+                request.send();
+            }
+        }
+        function download(file)
+        {
+         window.location=file;
+        }
+        
+    </script>
+</head>
+<body>
+    <nav class="navbar navbar-dark fixed-top bg-dark">
+        <div class="container-fluid">
+            <div class="navbar-header">
+                <a class="navbar-brand" href="#"><span id="ssid"></span></a>
+            </div>
+            <ul class="nav navbar-nav navbar-right">
+                <form class="form-inline">            
+                    <button type="button" onclick="location.href = '/'" class="btn btn-danger navbar-btn mx-2">
+                        <img src="home.png" alt="" style="width:auto;height:30px">
+                    </button>
+                    <button type="button" onclick="location.href = '/settings.html'" class="btn btn-danger navbar-btn">
+                        <img src="settings.png" alt="" style="width:auto;height:30px">
+                    </button>
+                </form>
+            </ul>
+        </div>
+    </nav>
+    <main role="main" class="container" style="margin-top:100px">
+        <table class="table" id="models">
+            <thead>
+                <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Weight [g]</th>
+                    <th scope="col">CG [mm]</th>
+                    <th scope="col" id="cgLRrow">CG left-right [mm]</th>
+                    <th scope="col"></th>
+                </tr>
+            </thead>
+        </table>
+        <button type="button" onclick="saveModel()" class="btn btn-primary btn-lg">New model</button>
+        <form method="post" enctype="multipart/form-data">
+            <div class="custom-file mt-5">
+                <input type="file" class="custom-file-input" id="customFile" name="filename">
+                <label class="custom-file-label" for="customFile">Restore file...</label>
+            </div>
+            
+            <script>
+                $('.custom-file-input').on('change', function() { 
+                    let fileName = $(this).val().split('\\').pop(); 
+                    $(this).next('.custom-file-label').addClass("selected").html(fileName); 
+                });
+            </script>
+
+            <div class="mt-4">
+                <a class="btn btn-outline-success btn-lg" id="backup" role="button" href="models.json" download="models.json">Backup</a>
+                <button type="submit" class="btn btn-outline-danger btn-lg">Restore</button>
+            </div>
+        </form> 
+    </main>
+    <p><font size="2"><center>(c) 2019 M. Lehmann - Version: <span id="cgscaleVersion">0.0</span></center></font></p>
+    <script>
+        getHead();
+        getParameter();
+        getModels();
+    </script>    
+</body>
+</html>

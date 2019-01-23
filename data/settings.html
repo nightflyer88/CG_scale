@@ -10,6 +10,7 @@
     <script src="/bootstrap.min.js"></script>
     <script>
         var CG_trans_visible = true;
+        
         function getHead(){
             var request = new XMLHttpRequest();
             request.onreadystatechange = function(){
@@ -18,7 +19,6 @@
                         var responseString = this.responseText;
                         var value = responseString.split("&");
                         document.getElementById("ssid").innerHTML = value[0];
-                        //document.getElementById("errMsg").innerHTML = value[1];
                         document.getElementById("cgscaleVersion").innerHTML = value[2];
                     }
                 }
@@ -68,6 +68,7 @@
                         setValue("password_STA", value[13]);
                         setValue("ssid_AP", value[14]);
                         setValue("password_AP", value[15]);
+                        document.getElementById("modelName").innerHTML = value[16];
                         if(value[0] == "2"){
                             CG_trans_visible = false;
                             document.getElementById("lc3_div").outerHTML = "";
@@ -117,51 +118,30 @@
             data += "&ssid_AP=" + document.getElementById("ssid_AP").value;
             data += "&password_AP=" + document.getElementById("password_AP").value;
             var request = new XMLHttpRequest();
-            request.open("GET", "saveParameter" + data, true);
             request.onreadystatechange = function(){
                 if(this.readyState == 4 && this.status == 200){
-                    if(this.responseText == "ok"){
-                        alert("Parameters saved");
-                        getParameter();
-                    }else{
-                        alert("Save parameter failed !");
-                    }
+                    alert("Parameters saved");
+                    getParameter();
+                }else if(this.readyState == 4 && this.status == 404){
+                    alert("Save parameter failed !");
                 }
             }
+            request.open("GET", "saveParameter" + data, true);
             request.send();
         }
         function autoCalibrate(){
             alert("Please put the reference weight on the scale.");
             var request = new XMLHttpRequest();
-            request.open("GET", "autoCalibrate", true);
             request.onreadystatechange = function(){
                 if(this.readyState == 4 && this.status == 200){
-                    if(this.responseText == "ok"){
-                        alert("Calibration successful");
-                        getParameter();
-                    }else{
-                        alert("Calibration failed !");
-                    }
+                    alert("Calibration successful");
+                    getParameter();
+                }else if(this.readyState == 4 && this.status == 404){
+                    alert("Calibration failed !");
                 }
             }
+            request.open("GET", "autoCalibrate", true);
             request.send();
-        }
-        function resetDefault(){
-            if (confirm("Reset to factory defaults ?")) {
-                var request = new XMLHttpRequest();
-                request.open("GET", "resetDefault", true);
-                request.onreadystatechange = function(){
-                    if(this.readyState == 4 && this.status == 200){
-                        if(this.responseText == "ok"){
-                            alert("Reset to factory defaults successful");
-                            getParameter();
-                        }else{
-                            alert("Reset to factory defaults failed !");
-                        }
-                    }
-                }
-                request.send();
-            }
         }
         function setValue(id, value)
         {    
@@ -174,24 +154,26 @@
         }
     </script>
 </head>
-<body onload=getRawValue()>
-    <script>
-        getHead();
-        getWiFiNetworks();
-        getParameter();
-    </script>
+<body>
     <nav class="navbar navbar-dark fixed-top bg-dark">
         <div class="container-fluid">
             <div class="navbar-header">
-                <a class="navbar-brand" href="#"><span id="ssid"></span></a>"
+                <a class="navbar-brand" href="#"><span id="ssid"></span></a>
             </div>
             <ul class="nav navbar-nav navbar-right">
-                <button type="button" onclick="location.href = '/'" class="btn btn-danger">Home</button>
+                <form class="form-inline">            
+                    <button type="button" onclick="location.href = '/models.html'" class="btn btn-primary navbar-btn mx-2">
+                        <img src="airplane.png" alt="" style="width:auto;height:30px">
+                        <span id="modelName"></span>
+                    </button>
+                    <button type="button" onclick="location.href = '/'" class="btn btn-danger navbar-btn">
+                        <img src="home.png" alt="" style="width:auto;height:30px">
+                    </button>
+                </form>
             </ul>
         </div>
     </nav>
-    <br><br><br>
-    <main role="main" class="container">
+    <main role="main" class="container" style="margin-top:100px">
         <h3>WiFi settings</h3>
         <div class="form-group">
             <label>Home WiFi name (SSID):</label>
@@ -271,9 +253,8 @@
             </select>
         </div>
         <br><br>
-        <button class="btn btn-success btn-lg" onclick="saveParameter()">save</button>
-        <button class="btn btn-primary btn-lg" onclick="autoCalibrate()">auto calibrate</button>
-        <button class="btn btn-danger btn-lg" onclick="resetDefault()">reset</button>
+        <button class="btn btn-success btn-lg" onclick="saveParameter()">Save</button>
+        <button class="btn btn-primary btn-lg" onclick="autoCalibrate()">Auto calibrate</button>
         <img src="CG_scale_mechanics.png" class="pull-left mr-4" alt="mechanics" style="width:100%">
         <font size="4">
             <div>
@@ -287,9 +268,13 @@
             </div>
         </font> 
         <br><br>
-        <!--<p><font size="4"><center>Lc1: <span id="lc1">-</span> Lc2: <span id="lc2">-</span><div id="lc3_div"> Lc3: <span id="lc3">-</span></div></center></font></p>-->
     </main>
-    <!--<div class="container"><font size="6"><span id="errMsg">-</span></font></div>-->
     <p><font size="2"><center>(c) 2019 M. Lehmann - Version: <span id="cgscaleVersion">0.0</span></center></font></p>
+    <script>
+        getHead();
+        getWiFiNetworks();
+        getParameter();
+        getRawValue();
+    </script>
 </body>
 </html>
