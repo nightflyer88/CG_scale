@@ -58,8 +58,7 @@ CG scale with 3 Loadcells:
 
 // **** Measurement settings ****
 
-#define STABILISINGTIME               3000     // ms
-#define TARE_TIMEOUT                  4000     // ms
+#define STABILISINGTIME               2000     // ms
 
 #define UPDATE_INTERVAL_OLED_MENU     500      // ms
 #define UPDATE_INTERVAL_LOADCELL      100      // ms
@@ -141,6 +140,6 @@ const char ip[4] =                  {1,1,1,1};    // default IP address
 
 // **** Model memory settings ****
 
-#define MAX_MODELNAME_LENGHT        15               // max chars 
+#define MAX_MODELNAME_LENGHT        32               // max chars 
 #define MODEL_FILE                  "/models.json"   // file to store models
 #define JSONBUFFER_SIZE             20000            // max file size in bytes

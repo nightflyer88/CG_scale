@@ -4,7 +4,7 @@
                       (c) 2019 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "1.0.62"
+#define CGSCALE_VERSION "1.0.63"
 /*
 
   ******************************************************************
@@ -204,7 +204,11 @@ char curModelName[MAX_MODELNAME_LENGHT + 1] = "";
 
 
 // Restart CPU
+#if defined(__AVR__)
 void(* resetCPU) (void) = 0;
+#elif defined(ESP8266)
+void resetCPU(){}
+#endif
 
 
 // save calibration factor
@@ -375,61 +379,85 @@ void setup() {
     oledDisplay.print(F("(c) 2019 M. Lehmann"));
   } while ( oledDisplay.nextPage() );
 
-  // init Loadcells
+  // init & tare Loadcells
   LoadCell_1.begin();
+  LoadCell_1.start(STABILISINGTIME);
   LoadCell_2.begin();
+  LoadCell_2.start(STABILISINGTIME);
+
+  if (LoadCell_1.getTareTimeoutFlag()) {
+    errMsg[++errMsgCnt] = "ERROR: Timeout TARE Lc1\n";
+  }
+  else {
+    LoadCell_1.setCalFactor(calFactorLoadcell1);
+  }
+
+  if (LoadCell_2.getTareTimeoutFlag()) {
+    errMsg[++errMsgCnt] = "ERROR: Timeout TARE Lc2\n";
+  }
+  else {
+    LoadCell_2.setCalFactor(calFactorLoadcell2);
+  }
+
   if (nLoadcells > 2) {
     LoadCell_3.begin();
-  }
+    LoadCell_3.start(STABILISINGTIME);
 
-  // tare
-  byte loadcell_1_rdy = 0;
-  byte loadcell_2_rdy = 0;
-  byte loadcell_3_rdy = 0;
-  lastTimeLoadcell = millis();
-
-  while ((loadcell_1_rdy + loadcell_2_rdy + loadcell_3_rdy) < 3) {
-    loadcell_1_rdy = LoadCell_1.startMultiple(STABILISINGTIME);
-    loadcell_2_rdy = LoadCell_2.startMultiple(STABILISINGTIME);
-    if (nLoadcells == 3) {
-      loadcell_3_rdy = LoadCell_3.startMultiple(STABILISINGTIME);
-    } else {
-      loadcell_3_rdy = 1;
+    if (LoadCell_3.getTareTimeoutFlag()) {
+      errMsg[++errMsgCnt] = "ERROR: Timeout TARE Lc3\n";
     }
-    // timeout
-    if ((millis() - lastTimeLoadcell) > TARE_TIMEOUT) {
-      errMsg[++errMsgCnt] = "ERROR: Timeout TARE\n";
-      break;
+    else {
+      LoadCell_3.setCalFactor(calFactorLoadcell3);
     }
   }
 
-  // check loadcells if error
-  if (!loadcell_1_rdy) {
-    errMsg[++errMsgCnt] = "ERROR: Loadcell 1 not ready\n";
-  }
-  if (!loadcell_2_rdy) {
-    errMsg[++errMsgCnt] = "ERROR: Loadcell 2 not ready\n";
-  }
-  if (!loadcell_3_rdy) {
-    errMsg[++errMsgCnt] = "ERROR: Loadcell 3 not ready\n";
-  }
-
-  // set calibration factor
-  LoadCell_1.setCalFactor(calFactorLoadcell1);
-  LoadCell_2.setCalFactor(calFactorLoadcell2);
-  if (nLoadcells > 2) {
-    LoadCell_3.setCalFactor(calFactorLoadcell3);
-  }
-
-  // stabilize scale values
-  for (int i = 0; i <= 5; i++) {
-    LoadCell_1.update();
-    LoadCell_2.update();
+  /*
+    // init Loadcells
+    LoadCell_1.begin();
+    LoadCell_2.begin();
     if (nLoadcells > 2) {
-      LoadCell_3.update();
+      LoadCell_3.begin();
     }
-    delay(200);
-  }
+
+    // tare
+    byte loadcell_1_rdy = 0;
+    byte loadcell_2_rdy = 0;
+    byte loadcell_3_rdy = 0;
+    lastTimeLoadcell = millis();
+
+    while ((loadcell_1_rdy + loadcell_2_rdy + loadcell_3_rdy) < 3) {
+      loadcell_1_rdy = LoadCell_1.startMultiple(STABILISINGTIME);
+      loadcell_2_rdy = LoadCell_2.startMultiple(STABILISINGTIME);
+      if (nLoadcells == 3) {
+        loadcell_3_rdy = LoadCell_3.startMultiple(STABILISINGTIME);
+      } else {
+        loadcell_3_rdy = 1;
+      }
+      // timeout
+      if ((millis() - lastTimeLoadcell) > TARE_TIMEOUT) {
+        errMsg[++errMsgCnt] = "ERROR: Timeout TARE\n";
+        break;
+      }
+    }
+
+    // check loadcells if error
+    if (!loadcell_1_rdy) {
+      errMsg[++errMsgCnt] = "ERROR: Loadcell 1 not ready\n";
+    }
+    if (!loadcell_2_rdy) {
+      errMsg[++errMsgCnt] = "ERROR: Loadcell 2 not ready\n";
+    }
+    if (!loadcell_3_rdy) {
+      errMsg[++errMsgCnt] = "ERROR: Loadcell 3 not ready\n";
+    }
+
+    // set calibration factor
+    LoadCell_1.setCalFactor(calFactorLoadcell1);
+    LoadCell_2.setCalFactor(calFactorLoadcell2);
+    if (nLoadcells > 2) {
+      LoadCell_3.setCalFactor(calFactorLoadcell3);
+    }
+  */
 
 #if defined(ESP8266)
   while (WiFi.status() != WL_CONNECTED) {
@@ -459,7 +487,7 @@ void setup() {
       oledDisplay.setCursor(0, 64);
       oledDisplay.print(WiFi.localIP());
     } while ( oledDisplay.nextPage() );
-    delay(5000);
+    //delay(5000);
   } else {
     // if WiFi not connected, switch to access point mode
     WiFi.mode(WIFI_AP);
@@ -493,6 +521,17 @@ void setup() {
       server.send(404, "text/plain", "404: Not Found");
   });
 #endif
+
+  // stabilize scale values
+  for (int i = 0; i <= 15; i++) {
+    LoadCell_1.update();
+    LoadCell_2.update();
+    if (nLoadcells > 2) {
+      LoadCell_3.update();
+    }
+    delay(200);
+  }
+
 }
 
 
@@ -528,6 +567,7 @@ void loop() {
 
   // update display and serial menu
   if ((millis() - lastTimeMenu) > UPDATE_INTERVAL_OLED_MENU) {
+    
     lastTimeMenu = millis();
 
     // total model weight
