@@ -4,7 +4,7 @@
                       (c) 2019 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "1.0.63"
+#define CGSCALE_VERSION "1.0.65"
 /*
 
   ******************************************************************
@@ -56,8 +56,8 @@
 #if defined(ESP8266)
 #include <FS.h>
 #include <ESP8266WiFi.h>
-#include <WiFiClient.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
 #include <ArduinoJson.h>
 #endif
 
@@ -268,6 +268,31 @@ bool runAutoCalibrate() {
 }
 
 
+// check if a loadcell has error
+bool getLoadcellError(){
+  bool err = false;
+  
+  if (LoadCell_1.getTareTimeoutFlag()) {
+    errMsg[++errMsgCnt] = "ERROR: Timeout TARE Lc1\n";
+    err = true;
+  }
+
+  if (LoadCell_2.getTareTimeoutFlag()) {
+    errMsg[++errMsgCnt] = "ERROR: Timeout TARE Lc2\n";
+    err = true;
+  }
+
+  if (nLoadcells > 2) {
+    if (LoadCell_3.getTareTimeoutFlag()) {
+      errMsg[++errMsgCnt] = "ERROR: Timeout TARE Lc3\n";
+      err = true;
+    }
+  }
+
+  return err;
+}
+
+
 void setup() {
 
   // init serial
@@ -381,83 +406,37 @@ void setup() {
 
   // init & tare Loadcells
   LoadCell_1.begin();
-  LoadCell_1.start(STABILISINGTIME);
+  //LoadCell_1.start(STABILISINGTIME);
+  LoadCell_1.setCalFactor(calFactorLoadcell1);
+  
   LoadCell_2.begin();
-  LoadCell_2.start(STABILISINGTIME);
-
-  if (LoadCell_1.getTareTimeoutFlag()) {
-    errMsg[++errMsgCnt] = "ERROR: Timeout TARE Lc1\n";
-  }
-  else {
-    LoadCell_1.setCalFactor(calFactorLoadcell1);
-  }
-
-  if (LoadCell_2.getTareTimeoutFlag()) {
-    errMsg[++errMsgCnt] = "ERROR: Timeout TARE Lc2\n";
-  }
-  else {
-    LoadCell_2.setCalFactor(calFactorLoadcell2);
-  }
-
+  //LoadCell_2.start(STABILISINGTIME);
+  LoadCell_2.setCalFactor(calFactorLoadcell2);
+  
   if (nLoadcells > 2) {
     LoadCell_3.begin();
-    LoadCell_3.start(STABILISINGTIME);
+    //LoadCell_3.start(STABILISINGTIME);
+    LoadCell_3.setCalFactor(calFactorLoadcell3);
+  }
 
-    if (LoadCell_3.getTareTimeoutFlag()) {
-      errMsg[++errMsgCnt] = "ERROR: Timeout TARE Lc3\n";
-    }
-    else {
-      LoadCell_3.setCalFactor(calFactorLoadcell3);
+  // stabilize scale values
+  long stabilisingtime = millis() + STABILISINGTIME;
+  while(millis() < stabilisingtime) {
+    LoadCell_1.update();
+    LoadCell_2.update();
+    if (nLoadcells > 2) {
+      LoadCell_3.update();
     }
   }
 
-  /*
-    // init Loadcells
-    LoadCell_1.begin();
-    LoadCell_2.begin();
-    if (nLoadcells > 2) {
-      LoadCell_3.begin();
-    }
+  LoadCell_1.tare();
+  LoadCell_2.tare();
+  if (nLoadcells > 2) {
+    LoadCell_3.tare();
+  }
 
-    // tare
-    byte loadcell_1_rdy = 0;
-    byte loadcell_2_rdy = 0;
-    byte loadcell_3_rdy = 0;
-    lastTimeLoadcell = millis();
-
-    while ((loadcell_1_rdy + loadcell_2_rdy + loadcell_3_rdy) < 3) {
-      loadcell_1_rdy = LoadCell_1.startMultiple(STABILISINGTIME);
-      loadcell_2_rdy = LoadCell_2.startMultiple(STABILISINGTIME);
-      if (nLoadcells == 3) {
-        loadcell_3_rdy = LoadCell_3.startMultiple(STABILISINGTIME);
-      } else {
-        loadcell_3_rdy = 1;
-      }
-      // timeout
-      if ((millis() - lastTimeLoadcell) > TARE_TIMEOUT) {
-        errMsg[++errMsgCnt] = "ERROR: Timeout TARE\n";
-        break;
-      }
-    }
-
-    // check loadcells if error
-    if (!loadcell_1_rdy) {
-      errMsg[++errMsgCnt] = "ERROR: Loadcell 1 not ready\n";
-    }
-    if (!loadcell_2_rdy) {
-      errMsg[++errMsgCnt] = "ERROR: Loadcell 2 not ready\n";
-    }
-    if (!loadcell_3_rdy) {
-      errMsg[++errMsgCnt] = "ERROR: Loadcell 3 not ready\n";
-    }
-
-    // set calibration factor
-    LoadCell_1.setCalFactor(calFactorLoadcell1);
-    LoadCell_2.setCalFactor(calFactorLoadcell2);
-    if (nLoadcells > 2) {
-      LoadCell_3.setCalFactor(calFactorLoadcell3);
-    }
-  */
+  getLoadcellError();
+  
 
 #if defined(ESP8266)
   while (WiFi.status() != WL_CONNECTED) {
@@ -487,7 +466,7 @@ void setup() {
       oledDisplay.setCursor(0, 64);
       oledDisplay.print(WiFi.localIP());
     } while ( oledDisplay.nextPage() );
-    //delay(5000);
+    delay(2000);
   } else {
     // if WiFi not connected, switch to access point mode
     WiFi.mode(WIFI_AP);
@@ -495,8 +474,19 @@ void setup() {
     WiFi.softAP(ssid_AP, password_AP);
   }
 
+  // init mDNS
+  String hostName = ssid_AP;
+  hostName.replace(" ", "");
+  hostName.toLowerCase();
+  char hostString[32];
+  hostName.toCharArray(hostString, 32);
+  MDNS.begin(hostString);
+
   // init webserver
   server.begin();
+
+  // Add service to MDNS-SD
+  MDNS.addService("http", "tcp", 80);
 
   // When the client requests data
   server.on("/getHead", getHead);
@@ -506,6 +496,7 @@ void setup() {
   server.on("/getWiFiNetworks", getWiFiNetworks);
   server.on("/saveParameter", saveParameter);
   server.on("/autoCalibrate", autoCalibrate);
+  server.on("/tare", runTare);
   server.on("/saveModel", saveModel);
   server.on("/openModel", openModel);
   server.on("/deleteModel", deleteModel);
@@ -520,17 +511,29 @@ void setup() {
     if (!handleFileRead(server.uri()))
       server.send(404, "text/plain", "404: Not Found");
   });
-#endif
 
-  // stabilize scale values
-  for (int i = 0; i <= 15; i++) {
-    LoadCell_1.update();
-    LoadCell_2.update();
-    if (nLoadcells > 2) {
-      LoadCell_3.update();
-    }
-    delay(200);
+Serial.println("Sending mDNS query");
+int n = MDNS.queryService("esp", "tcp"); // Send out query for esp tcp services
+Serial.println("mDNS query done");
+if (n == 0) {
+  Serial.println("no services found");
+} else {
+  Serial.print(n);
+  Serial.println(" service(s) found");
+  for (int i = 0; i < n; ++i) {
+    // Print details for each service found
+    Serial.print(i + 1);
+    Serial.print(": ");
+    Serial.print(MDNS.hostname(i));
+    Serial.print(" (");
+    Serial.print(MDNS.IP(i));
+    Serial.print(":");
+    Serial.print(MDNS.port(i));
+    Serial.println(")");
   }
+}
+Serial.println();
+#endif
 
 }
 
@@ -961,6 +964,7 @@ void loop() {
   }
 
 #if defined(ESP8266)
+  MDNS.update();
   server.handleClient();
 #endif
 
@@ -1164,6 +1168,21 @@ void saveParameter() {
 void autoCalibrate() {
   while (!runAutoCalibrate());
   server.send(200, "text/plain", "parameters saved");
+}
+
+
+// tare cg scale
+void runTare() {
+  LoadCell_1.tare();
+  LoadCell_2.tare();
+  if (nLoadcells > 2) {
+    LoadCell_3.tare();
+  }
+  if (!getLoadcellError()){
+    server.send(200, "text/plain", "tare completed");
+    return;
+  }
+  server.send(404, "text/plain", "404: tare failed !");
 }
 
 

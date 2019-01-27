@@ -51,14 +51,14 @@ CG scale with 3 Loadcells:
 #define PIN_LOADCELL2_DOUT            D2
 #define PIN_LOADCELL2_PD_SCK          D1
   
-#define PIN_LOADCELL3_DOUT            D8
+#define PIN_LOADCELL3_DOUT            D0
 #define PIN_LOADCELL3_PD_SCK          D7
 
 
 
 // **** Measurement settings ****
 
-#define STABILISINGTIME               2000     // ms
+#define STABILISINGTIME               3000     // ms
 
 #define UPDATE_INTERVAL_OLED_MENU     500      // ms
 #define UPDATE_INTERVAL_LOADCELL      100      // ms
@@ -135,7 +135,7 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NON
 // Access point mode: create own network
 #define SSID_AP                     "CG scale"
 #define PASSWORD_AP                 ""
-const char ip[4] =                  {1,1,1,1};    // default IP address
+const char ip[4] =                  {1,2,3,4};    // default IP address
 
 
 // **** Model memory settings ****
