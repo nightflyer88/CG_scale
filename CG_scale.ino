@@ -4,7 +4,7 @@
                       (c) 2019 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "1.0.65"
+#define CGSCALE_VERSION "1.0.66"
 /*
 
   ******************************************************************
@@ -379,12 +379,6 @@ void setup() {
     curModelName[0] = '\0';
   }
 
-  // Start by connecting to a WiFi network
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid_STA, password_STA);
-
-  long timeoutWiFi = millis();
-
 #endif
 
   // init OLED display
@@ -406,22 +400,18 @@ void setup() {
 
   // init & tare Loadcells
   LoadCell_1.begin();
-  //LoadCell_1.start(STABILISINGTIME);
   LoadCell_1.setCalFactor(calFactorLoadcell1);
   
   LoadCell_2.begin();
-  //LoadCell_2.start(STABILISINGTIME);
   LoadCell_2.setCalFactor(calFactorLoadcell2);
   
   if (nLoadcells > 2) {
     LoadCell_3.begin();
-    //LoadCell_3.start(STABILISINGTIME);
     LoadCell_3.setCalFactor(calFactorLoadcell3);
   }
 
   // stabilize scale values
-  long stabilisingtime = millis() + STABILISINGTIME;
-  while(millis() < stabilisingtime) {
+  while(millis() < STABILISINGTIME) {
     LoadCell_1.update();
     LoadCell_2.update();
     if (nLoadcells > 2) {
@@ -439,6 +429,14 @@ void setup() {
   
 
 #if defined(ESP8266)
+
+  // Start by connecting to a WiFi network
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid_STA, password_STA);
+
+  long timeoutWiFi = millis();
+  bool wifiSTAmode = true;
+  
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     if (WiFi.status() == WL_NO_SSID_AVAIL) {
@@ -450,43 +448,54 @@ void setup() {
     }
   }
 
-  if (WiFi.status() == WL_CONNECTED) {
-    // if connected, print status
-    oledDisplay.firstPage();
-    do {
-      oledDisplay.setFont(u8g2_font_5x7_tr);
-      oledDisplay.setCursor(0, 7);
-      oledDisplay.print(F("Connected to WiFi:"));
-      oledDisplay.setCursor(0, 43);
-      oledDisplay.print(F("IP address:"));
-
-      oledDisplay.setFont(u8g2_font_helvR12_tr);
-      oledDisplay.setCursor(0, 28);
-      oledDisplay.print(ssid_STA);
-      oledDisplay.setCursor(0, 64);
-      oledDisplay.print(WiFi.localIP());
-    } while ( oledDisplay.nextPage() );
-    delay(2000);
-  } else {
+  if (WiFi.status() != WL_CONNECTED) {
     // if WiFi not connected, switch to access point mode
     WiFi.mode(WIFI_AP);
     WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
     WiFi.softAP(ssid_AP, password_AP);
+    wifiSTAmode = false;
   }
 
   // init mDNS
-  String hostName = ssid_AP;
+  String hostName = "disabled";
+#if ENABLE_MDNS 
+  hostName = ssid_AP;
   hostName.replace(" ", "");
   hostName.toLowerCase();
   char hostString[32];
   hostName.toCharArray(hostString, 32);
   MDNS.begin(hostString);
+  hostName += ".local";
+#endif
 
-  // init webserver
-  server.begin();
+  // print wifi status
+  oledDisplay.firstPage();
+  do {
+    oledDisplay.setFont(u8g2_font_5x7_tr);
+    oledDisplay.setCursor(0, 14);
+    oledDisplay.print(F("WiFi:"));
+    oledDisplay.setCursor(0, 39);
+    oledDisplay.print(F("Host:"));
+    oledDisplay.setCursor(0, 64);
+    oledDisplay.print(F("IP:"));
 
-  // Add service to MDNS-SD
-  MDNS.addService("http", "tcp", 80);
+    oledDisplay.setFont(u8g2_font_helvR10_tr);
+    oledDisplay.setCursor(28, 14);
+    if(wifiSTAmode){
+      oledDisplay.print(ssid_STA);
+    }else{
+      oledDisplay.print(ssid_AP);
+    }
+    oledDisplay.setCursor(28, 39);
+    oledDisplay.print(hostName);
+    oledDisplay.setCursor(28, 64);
+    if(wifiSTAmode){
+      oledDisplay.print(WiFi.localIP());
+    }else{
+      oledDisplay.print(WiFi.softAPIP());
+    }    
+  } while ( oledDisplay.nextPage() );
+  delay(3000);
 
   // When the client requests data
   server.on("/getHead", getHead);
@@ -512,27 +521,14 @@ void setup() {
       server.send(404, "text/plain", "404: Not Found");
   });
 
-Serial.println("Sending mDNS query");
-int n = MDNS.queryService("esp", "tcp"); // Send out query for esp tcp services
-Serial.println("mDNS query done");
-if (n == 0) {
-  Serial.println("no services found");
-} else {
-  Serial.print(n);
-  Serial.println(" service(s) found");
-  for (int i = 0; i < n; ++i) {
-    // Print details for each service found
-    Serial.print(i + 1);
-    Serial.print(": ");
-    Serial.print(MDNS.hostname(i));
-    Serial.print(" (");
-    Serial.print(MDNS.IP(i));
-    Serial.print(":");
-    Serial.print(MDNS.port(i));
-    Serial.println(")");
-  }
-}
-Serial.println();
+  // init webserver
+  server.begin();
+  
+#if ENABLE_MDNS
+  // Add service to MDNS-SD
+  MDNS.addService("http", "tcp", 80);
+#endif
+
 #endif
 
 }
@@ -964,7 +960,11 @@ void loop() {
   }
 
 #if defined(ESP8266)
+
+#if ENABLE_MDNS
   MDNS.update();
+#endif
+
   server.handleClient();
 #endif
 

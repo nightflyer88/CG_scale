@@ -51,8 +51,8 @@ CG scale with 3 Loadcells:
 #define PIN_LOADCELL2_DOUT            D2
 #define PIN_LOADCELL2_PD_SCK          D1
   
-#define PIN_LOADCELL3_DOUT            D0
-#define PIN_LOADCELL3_PD_SCK          D7
+#define PIN_LOADCELL3_DOUT            D7
+#define PIN_LOADCELL3_PD_SCK          D0
 
 
 
@@ -130,12 +130,14 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NON
 // Station mode: connect to available network
 #define SSID_STA                    "myWiFi"
 #define PASSWORD_STA                ""
-#define TIMEOUT_CONNECT             12000   //ms
+#define TIMEOUT_CONNECT             15000   //ms
 
 // Access point mode: create own network
 #define SSID_AP                     "CG scale"
 #define PASSWORD_AP                 ""
 const char ip[4] =                  {1,2,3,4};    // default IP address
+
+#define ENABLE_MDNS                 false         // experimental (speed is slow): Enable mDNS to reach the webpage with hostname.local
 
 
 // **** Model memory settings ****
