@@ -130,7 +130,7 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NON
 // Station mode: connect to available network
 #define SSID_STA                    "myWiFi"
 #define PASSWORD_STA                ""
-#define TIMEOUT_CONNECT             15000   //ms
+#define TIMEOUT_CONNECT             30000   //ms
 
 // Access point mode: create own network
 #define SSID_AP                     "CG scale"

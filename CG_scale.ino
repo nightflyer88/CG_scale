@@ -4,12 +4,12 @@
                       (c) 2019 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "1.0.66"
+#define CGSCALE_VERSION "1.1"
 /*
 
   ******************************************************************
   history:
-  V1.1    beta          ESP8266
+  V1.1    02.02.19      Supports ESP8266, webpage integrated, STA and AP mode
   V1.0    12.01.19      first release
 
 
@@ -97,6 +97,9 @@ enum {
   MENU_RESISTOR_R2,
   MENU_BATTERY_MEASUREMENT,
   MENU_SHOW_ACTUAL,
+#if defined(ESP8266)
+  MENU_WIFI_INFO,
+#endif
   MENU_RESET_DEFAULT
 };
 
@@ -199,6 +202,8 @@ int menuPage = 0;
 String errMsg[5] = "";
 int errMsgCnt = 0;
 #if defined(ESP8266)
+String wifiMsg = "";
+bool wifiSTAmode = true;
 char curModelName[MAX_MODELNAME_LENGHT + 1] = "";
 #endif
 
@@ -207,7 +212,7 @@ char curModelName[MAX_MODELNAME_LENGHT + 1] = "";
 #if defined(__AVR__)
 void(* resetCPU) (void) = 0;
 #elif defined(ESP8266)
-void resetCPU(){}
+void resetCPU() {}
 #endif
 
 
@@ -250,14 +255,14 @@ bool runAutoCalibrate() {
   float toWeightLoadCell2 = ((refCG - distanceX1) * refWeight) / distanceX2;
   float toWeightLoadCell1 = refWeight - toWeightLoadCell2;
   float toWeightLoadCell3 = 0;
-  if (nLoadcells > 2) {
+  if (nLoadcells == 3) {
     toWeightLoadCell1 = toWeightLoadCell1 / 2;
     toWeightLoadCell3 = toWeightLoadCell1;
   }
   // calculate calibration factors
   calFactorLoadcell1 = calFactorLoadcell1 / (toWeightLoadCell1 / weightLoadCell1);
   calFactorLoadcell2 = calFactorLoadcell2 / (toWeightLoadCell2 / weightLoadCell2);
-  if (nLoadcells > 2) {
+  if (nLoadcells == 3) {
     calFactorLoadcell3 = calFactorLoadcell3 / (toWeightLoadCell3 / weightLoadCell3);
   }
   saveCalFactor1();
@@ -269,9 +274,9 @@ bool runAutoCalibrate() {
 
 
 // check if a loadcell has error
-bool getLoadcellError(){
+bool getLoadcellError() {
   bool err = false;
-  
+
   if (LoadCell_1.getTareTimeoutFlag()) {
     errMsg[++errMsgCnt] = "ERROR: Timeout TARE Lc1\n";
     err = true;
@@ -282,7 +287,7 @@ bool getLoadcellError(){
     err = true;
   }
 
-  if (nLoadcells > 2) {
+  if (nLoadcells == 3) {
     if (LoadCell_3.getTareTimeoutFlag()) {
       errMsg[++errMsgCnt] = "ERROR: Timeout TARE Lc3\n";
       err = true;
@@ -401,64 +406,85 @@ void setup() {
   // init & tare Loadcells
   LoadCell_1.begin();
   LoadCell_1.setCalFactor(calFactorLoadcell1);
-  
+
   LoadCell_2.begin();
   LoadCell_2.setCalFactor(calFactorLoadcell2);
-  
-  if (nLoadcells > 2) {
+
+  if (nLoadcells == 3) {
     LoadCell_3.begin();
     LoadCell_3.setCalFactor(calFactorLoadcell3);
   }
 
   // stabilize scale values
-  while(millis() < STABILISINGTIME) {
+  while (millis() < STABILISINGTIME) {
     LoadCell_1.update();
     LoadCell_2.update();
-    if (nLoadcells > 2) {
+    if (nLoadcells == 3) {
       LoadCell_3.update();
     }
   }
 
   LoadCell_1.tare();
   LoadCell_2.tare();
-  if (nLoadcells > 2) {
+  if (nLoadcells == 3) {
     LoadCell_3.tare();
   }
 
   getLoadcellError();
-  
+
 
 #if defined(ESP8266)
 
-  // Start by connecting to a WiFi network
+  // Start by connecting to a WiFi network 
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid_STA, password_STA);
 
+  wifiMsg += TimeToString(millis());
+  wifiMsg += " STA mode - connect with wifi: ";
+  wifiMsg += ssid_STA;
+  wifiMsg += "\n";
+
   long timeoutWiFi = millis();
-  bool wifiSTAmode = true;
-  
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     if (WiFi.status() == WL_NO_SSID_AVAIL) {
+      wifiMsg += TimeToString(millis());
+      wifiMsg += " No SSID available\n";
       break;
     } else if (WiFi.status() == WL_CONNECT_FAILED) {
+      wifiMsg += TimeToString(millis());
+      wifiMsg += " Connection failed\n";
       break;
     } else if ((millis() - timeoutWiFi) > TIMEOUT_CONNECT) {
+      wifiMsg += TimeToString(millis());
+      wifiMsg += " Timeout\n";
       break;
     }
   }
 
   if (WiFi.status() != WL_CONNECTED) {
     // if WiFi not connected, switch to access point mode
+    wifiSTAmode = false;
+    wifiMsg += TimeToString(millis());
+    wifiMsg += " AP mode - create access point: ";
+    wifiMsg += ssid_AP;
     WiFi.mode(WIFI_AP);
     WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
     WiFi.softAP(ssid_AP, password_AP);
-    wifiSTAmode = false;
+    wifiMsg += "\n";
+    wifiMsg += TimeToString(millis());
+    wifiMsg += " IP: ";
+    wifiMsg += WiFi.softAPIP().toString();
+  } else {
+    wifiMsg += TimeToString(millis());
+    wifiMsg += " Connected, IP: ";
+    wifiMsg += WiFi.localIP().toString();
   }
 
   // init mDNS
   String hostName = "disabled";
-#if ENABLE_MDNS 
+#if ENABLE_MDNS
   hostName = ssid_AP;
   hostName.replace(" ", "");
   hostName.toLowerCase();
@@ -467,6 +493,10 @@ void setup() {
   MDNS.begin(hostString);
   hostName += ".local";
 #endif
+  wifiMsg += "\n";
+  wifiMsg += TimeToString(millis());
+  wifiMsg += " Hostname: ";
+  wifiMsg += hostName;
 
   // print wifi status
   oledDisplay.firstPage();
@@ -481,19 +511,19 @@ void setup() {
 
     oledDisplay.setFont(u8g2_font_helvR10_tr);
     oledDisplay.setCursor(28, 14);
-    if(wifiSTAmode){
+    if (wifiSTAmode) {
       oledDisplay.print(ssid_STA);
-    }else{
+    } else {
       oledDisplay.print(ssid_AP);
     }
     oledDisplay.setCursor(28, 39);
     oledDisplay.print(hostName);
     oledDisplay.setCursor(28, 64);
-    if(wifiSTAmode){
+    if (wifiSTAmode) {
       oledDisplay.print(WiFi.localIP());
-    }else{
+    } else {
       oledDisplay.print(WiFi.softAPIP());
-    }    
+    }
   } while ( oledDisplay.nextPage() );
   delay(3000);
 
@@ -523,7 +553,7 @@ void setup() {
 
   // init webserver
   server.begin();
-  
+
 #if ENABLE_MDNS
   // Add service to MDNS-SD
   MDNS.addService("http", "tcp", 80);
@@ -536,9 +566,18 @@ void setup() {
 
 void loop() {
 
+#if defined(ESP8266)
+
+#if ENABLE_MDNS
+  MDNS.update();
+#endif
+
+  server.handleClient();
+#endif
+
   LoadCell_1.update();
   LoadCell_2.update();
-  if (nLoadcells > 2) {
+  if (nLoadcells == 3) {
     LoadCell_3.update();
   }
 
@@ -549,7 +588,7 @@ void loop() {
     // get Loadcell weights
     weightLoadCell1 = LoadCell_1.getData();
     weightLoadCell2 = LoadCell_2.getData();
-    if (nLoadcells > 2) {
+    if (nLoadcells == 3) {
       weightLoadCell3 = LoadCell_3.getData();
     }
 
@@ -566,7 +605,7 @@ void loop() {
 
   // update display and serial menu
   if ((millis() - lastTimeMenu) > UPDATE_INTERVAL_OLED_MENU) {
-    
+
     lastTimeMenu = millis();
 
     // total model weight
@@ -580,7 +619,7 @@ void loop() {
       CG_length = ((weightLoadCell2 * distanceX2) / weightTotal) + distanceX1;
 
       // CG transverse axis
-      if (nLoadcells > 2) {
+      if (nLoadcells == 3) {
         CG_trans = (distanceX3 / 2) - (((weightLoadCell1 + weightLoadCell2 / 2) * distanceX3) / weightTotal);
       }
     } else {
@@ -597,7 +636,7 @@ void loop() {
     char buff[8];
     int pos_weightTotal = 7;
     int pos_CG_length = 28;
-    if (nLoadcells < 3) {
+    if (nLoadcells == 2) {
       pos_weightTotal = 17;
       pos_CG_length = 45;
       if (!enableBatVolt) {
@@ -635,7 +674,7 @@ void loop() {
         oledDisplay.print(F(" mm"));
 
         // print CG transverse axis
-        if (nLoadcells > 2) {
+        if (nLoadcells == 3) {
           oledDisplay.drawXBMP(2, 47, 18, 18, CGtransImage);
           dtostrf(CG_trans, 5, 1, buff);
           oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), 64);
@@ -772,11 +811,6 @@ void loop() {
             menuPage = 0;
             updateMenu = true;
             break;
-          case MENU_SHOW_ACTUAL:
-            Serial.readString();
-            menuPage = 0;
-            updateMenu = true;
-            break;
           case MENU_RESET_DEFAULT:
             if (Serial.read() == 'J') {
               // reset eeprom
@@ -796,6 +830,11 @@ void loop() {
             menuPage = 0;
             updateMenu = true;
             break;
+          default:
+            Serial.readString();
+            menuPage = 0;
+            updateMenu = true;
+            break;
         }
         Serial.readString();
 
@@ -809,39 +848,92 @@ void loop() {
         case MENU_HOME:
           Serial.print(F("\n\n********************************************\nCG scale by M.Lehmann - V"));
           Serial.print(CGSCALE_VERSION);
-          Serial.print(F("\n\n1  - Set number of load cells ("));
+          Serial.print(F("\n\n"));
+
+          Serial.print(MENU_LOADCELLS);
+          Serial.print(F("  - Set number of load cells ("));
           Serial.print(nLoadcells);
-          Serial.print(F(")\n2  - Set distance X1 ("));
+
+          Serial.print(F(")\n"));
+          Serial.print(MENU_DISTANCE_X1);
+          Serial.print(F("  - Set distance X1 ("));
           Serial.print(distanceX1);
-          Serial.print(F("mm)\n3  - Set distance X2 ("));
+
+          Serial.print(F("mm)\n"));
+          Serial.print(MENU_DISTANCE_X2);
+          Serial.print(F("  - Set distance X2 ("));
           Serial.print(distanceX2);
-          Serial.print(F("mm)\n4  - Set distance X3 ("));
+
+          Serial.print(F("mm)\n"));
+          Serial.print(MENU_DISTANCE_X3);
+          Serial.print(F("  - Set distance X3 ("));
           Serial.print(distanceX3);
-          Serial.print(F("mm)\n5  - Set reference weight ("));
+
+          Serial.print(F("mm)\n"));
+          Serial.print(MENU_REF_WEIGHT);
+          Serial.print(F("  - Set reference weight ("));
           Serial.print(refWeight);
-          Serial.print(F("g)\n6  - Set reference CG ("));
+
+          Serial.print(F("g)\n"));
+          Serial.print(MENU_REF_CG);
+          Serial.print(F("  - Set reference CG ("));
           Serial.print(refCG);
-          Serial.print(F("mm)\n7  - Start autocalibration\n8  - Set calibration factor of load cell 1 ("));
+
+          Serial.print(F("mm)\n"));
+          Serial.print(MENU_AUTO_CALIBRATE);
+          Serial.print(F("  - Start autocalibration\n"));
+
+          Serial.print(MENU_LOADCELL1_CALIBRATION_FACTOR);
+          Serial.print(F("  - Set calibration factor of load cell 1 ("));
           Serial.print(calFactorLoadcell1);
-          Serial.print(F(")\n9  - Set calibration factor of load cell 2 ("));
+
+          Serial.print(F(")\n"));
+          Serial.print(MENU_LOADCELL2_CALIBRATION_FACTOR);
+          Serial.print(F("  - Set calibration factor of load cell 2 ("));
           Serial.print(calFactorLoadcell2);
-          Serial.print(F(")\n10 - Set calibration factor of load cell 3 ("));
+
+          Serial.print(F(")\n"));
+          Serial.print(MENU_LOADCELL3_CALIBRATION_FACTOR);
+          Serial.print(F(" - Set calibration factor of load cell 3 ("));
           Serial.print(calFactorLoadcell3);
-          Serial.print(F(")\n11 - Set value of resistor R1 ("));
+
+          Serial.print(F(")\n"));
+          Serial.print(MENU_RESISTOR_R1);
+          Serial.print(F(" - Set value of resistor R1 ("));
           Serial.print(resistorR1);
-          Serial.print(F("ohm)\n12 - Set value of resistor R2 ("));
+
+          Serial.print(F("ohm)\n"));
+          Serial.print(MENU_RESISTOR_R2);
+          Serial.print(F(" - Set value of resistor R2 ("));
           Serial.print(resistorR2);
-          Serial.print(F("ohm)\n13 - Enable battery voltage measurement ("));
+
+          Serial.print(F("ohm)\n"));
+          Serial.print(MENU_BATTERY_MEASUREMENT);
+          Serial.print(F(" - Enable battery voltage measurement ("));
           if (enableBatVolt) {
             Serial.print(F("enabled)\n"));
           } else {
             Serial.print(F("disabled)\n"));
           }
-          Serial.print(F("14 - Show actual values\n15 - Reset to factory defaults\n\n"));
+
+          Serial.print(MENU_SHOW_ACTUAL);
+          Serial.print(F(" - Show actual values\n"));
+
+#if defined(ESP8266)
+          Serial.print(MENU_WIFI_INFO);
+          Serial.print(F(" - Show WiFi network info\n"));
+#endif
+
+          Serial.print(MENU_RESET_DEFAULT);
+          Serial.print(F(" - Reset to factory defaults\n"));
+
+          Serial.print(F("\n"));
           for (int i = 1; i <= errMsgCnt; i++) {
             Serial.print(errMsg[i]);
           }
-          Serial.print(F("Please choose the menu number:"));
+
+          Serial.print(F("\nPlease choose the menu number:"));
+
           updateMenu = false;
           break;
         case MENU_LOADCELLS:
@@ -928,7 +1020,7 @@ void loop() {
           Serial.print(weightLoadCell1);
           Serial.print(F("g  Lc2: "));
           Serial.print(weightLoadCell2);
-          if (nLoadcells > 2) {
+          if (nLoadcells == 3) {
             Serial.print(F("g  Lc3: "));
             Serial.print(weightLoadCell3);
           }
@@ -936,7 +1028,7 @@ void loop() {
           Serial.print(weightTotal);
           Serial.print(F("g  CG length: "));
           Serial.print(CG_length);
-          if (nLoadcells > 2) {
+          if (nLoadcells == 3) {
             Serial.print(F("mm  CG trans: "));
             Serial.print(CG_trans);
             Serial.print(F("mm"));
@@ -948,6 +1040,53 @@ void loop() {
           }
           Serial.println();
           break;
+#if defined(ESP8266)
+        case MENU_WIFI_INFO:
+          {
+            Serial.println("\n\n********************************************\nWiFi network information\n");
+            Serial.println("# Startup log:");
+            Serial.println(wifiMsg);
+            Serial.println("# end of log");
+
+            if(wifiSTAmode == false){
+              Serial.print("\nConnected clients: ");
+              Serial.println(WiFi.softAPgetStationNum());
+            }
+
+            Serial.println("\nAvailable WiFi networks:");
+            int wifiCnt = WiFi.scanNetworks();
+            if (wifiCnt == 0) {
+              Serial.println("no networks found");
+            } else {
+              for (int i = 0; i < wifiCnt; ++i) {
+                // Print SSID and RSSI for each network found
+                Serial.print(i + 1);
+                Serial.print(": ");
+                Serial.print(WiFi.SSID(i));
+                Serial.print(" (");
+                Serial.print(WiFi.RSSI(i));
+                Serial.print("dBm) ");
+                switch (WiFi.encryptionType(i)) {
+                  case ENC_TYPE_WEP:
+                    Serial.print("WEP");
+                    break;
+                  case ENC_TYPE_TKIP:
+                    Serial.print("WPA");
+                    break;
+                  case ENC_TYPE_CCMP:
+                    Serial.print("WPA2");
+                    break;
+                  case ENC_TYPE_AUTO:
+                    Serial.print("Auto");
+                    break;
+                }
+                Serial.println("");
+              }
+            }
+          }
+          updateMenu = false;
+          break;
+#endif
         case MENU_RESET_DEFAULT:
           Serial.print(F("\n\nReset to factory defaults (J/N)?\n"));
           updateMenu = false;
@@ -958,16 +1097,6 @@ void loop() {
       updateMenu = true;
     }
   }
-
-#if defined(ESP8266)
-
-#if ENABLE_MDNS
-  MDNS.update();
-#endif
-
-  server.handleClient();
-#endif
-
 }
 
 
@@ -1175,10 +1304,10 @@ void autoCalibrate() {
 void runTare() {
   LoadCell_1.tare();
   LoadCell_2.tare();
-  if (nLoadcells > 2) {
+  if (nLoadcells == 3) {
     LoadCell_3.tare();
   }
-  if (!getLoadcellError()){
+  if (!getLoadcellError()) {
     server.send(200, "text/plain", "tare completed");
     return;
   }
@@ -1423,4 +1552,19 @@ void writeModelData(JsonObject& object) {
   object["x2"] = distanceX2;
   object["x3"] = distanceX3;
 }
+
+// convert time to string
+char * TimeToString(unsigned long t)
+{
+  static char str[13];
+  int h = t / 3600000;
+  t = t % 3600000;
+  int m = t / 60000;
+  t = t % 60000;
+  int s = t / 1000;
+  int ms = t - (s * 1000);
+  sprintf(str, "%02ld:%02d:%02d.%03d", h, m, s, ms);
+  return str;
+}
+
 #endif
