@@ -1,6 +1,6 @@
 /*
   -----------------------------------------------------------
-            Settings 
+            Settings for AVR based MCUs
   -----------------------------------------------------------
   General settings for the CG scale.
 */
@@ -43,6 +43,7 @@ CG scale with 3 Loadcells:
             |        |                     |
             |---X1---|---------X2----------|
 */
+
 
 #define PIN_LOADCELL1_DOUT            A2
 #define PIN_LOADCELL1_PD_SCK          A3
@@ -99,8 +100,8 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NON
 #define V_REF                         5000     // set supply voltage from 1800 to 5500mV
 
 // voltage divider
-#define RESISTOR_R1                   10000    // Ohms
-#define RESISTOR_R2                   10000    // Ohms
+#define RESISTOR_R1                   10000    // ohm
+#define RESISTOR_R2                   10000    // ohm
 
 /*
                   voltage input
