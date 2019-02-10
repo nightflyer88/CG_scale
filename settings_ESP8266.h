@@ -137,7 +137,7 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NON
 #define PASSWORD_AP                 ""
 const char ip[4] =                  {1,2,3,4};    // default IP address
 
-#define ENABLE_MDNS                 false         // experimental (speed is slow): Enable mDNS to reach the webpage with hostname.local
+#define ENABLE_MDNS                 true         // experimental (speed is slow): Enable mDNS to reach the webpage with hostname.local
 
 
 // **** Model memory settings ****

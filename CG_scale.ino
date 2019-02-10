@@ -4,7 +4,7 @@
                       (c) 2019 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "1.1"
+#define CGSCALE_VERSION "1.1.12b"
 /*
 
   ******************************************************************
@@ -58,6 +58,8 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
+#include <WiFiUdp.h>
+#include <ArduinoOTA.h>
 #include <ArduinoJson.h>
 #endif
 
@@ -203,6 +205,7 @@ String errMsg[5] = "";
 int errMsgCnt = 0;
 #if defined(ESP8266)
 String wifiMsg = "";
+String updateMsg = "";
 bool wifiSTAmode = true;
 char curModelName[MAX_MODELNAME_LENGHT + 1] = "";
 #endif
@@ -295,6 +298,25 @@ bool getLoadcellError() {
   }
 
   return err;
+}
+
+
+// print update progress screen
+void printUpdateProgress(unsigned int progress, unsigned int total) {
+  oledDisplay.firstPage();
+    do {
+      oledDisplay.setFont(u8g2_font_helvR08_tr);
+      oledDisplay.setCursor(0, 12);
+      oledDisplay.print(updateMsg);
+
+      oledDisplay.setFont(u8g2_font_5x7_tr);
+      oledDisplay.setCursor(107, 35);
+      oledDisplay.printf("%u%%\r", (progress / (total / 100)));
+
+      oledDisplay.drawFrame(0,40,128,10);
+      oledDisplay.drawBox(0,40,(progress / (total / 128)),10);
+      
+    } while ( oledDisplay.nextPage() );
 }
 
 
@@ -435,7 +457,7 @@ void setup() {
 
 #if defined(ESP8266)
 
-  // Start by connecting to a WiFi network 
+  // Start by connecting to a WiFi network
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid_STA, password_STA);
 
@@ -554,9 +576,51 @@ void setup() {
   // init webserver
   server.begin();
 
+  // init OTA (over the air update)
+  ArduinoOTA.setHostname(ssid_AP);
+  ArduinoOTA.setPassword(password_AP);
+
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH) {
+      type = "firmware";
+    } else { // U_SPIFFS
+      //SPIFFS.end();
+      type = "SPIFFS";
+    }
+    // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+    updateMsg = "Updating " + type;
+  });
+  
+  ArduinoOTA.onEnd([]() {
+    updateMsg = "successful..";
+    printUpdateProgress(100,100);
+  });
+  
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    printUpdateProgress(progress,total);
+  });
+  
+  ArduinoOTA.onError([](ota_error_t error) {
+    if (error == OTA_AUTH_ERROR) {
+      updateMsg = "Auth Failed";
+    } else if (error == OTA_BEGIN_ERROR) {
+      updateMsg = "Begin Failed";
+    } else if (error == OTA_CONNECT_ERROR) {
+      updateMsg = "Connect Failed";
+    } else if (error == OTA_RECEIVE_ERROR) {
+      updateMsg = "Receive Failed";
+    } else if (error == OTA_END_ERROR) {
+      updateMsg = "End Failed";
+    }
+    printUpdateProgress(0,100);
+  });
+  
+  ArduinoOTA.begin();
+
 #if ENABLE_MDNS
   // Add service to MDNS-SD
-  MDNS.addService("http", "tcp", 80);
+  MDNS.addService("http", "tcp", 8080);
 #endif
 
 #endif
@@ -572,6 +636,7 @@ void loop() {
   MDNS.update();
 #endif
 
+  ArduinoOTA.handle();
   server.handleClient();
 #endif
 
@@ -1048,7 +1113,7 @@ void loop() {
             Serial.println(wifiMsg);
             Serial.println("# end of log");
 
-            if(wifiSTAmode == false){
+            if (wifiSTAmode == false) {
               Serial.print("\nConnected clients: ");
               Serial.println(WiFi.softAPgetStationNum());
             }
