@@ -63,9 +63,7 @@ CG scale with 3 Loadcells:
 #define UPDATE_INTERVAL_OLED_MENU     500      // ms
 #define UPDATE_INTERVAL_LOADCELL      100      // ms
 
-#define SMOOTHING_LOADCELL1           0.4     // IIR filter: smoothing value from 0.00-1.00
-#define SMOOTHING_LOADCELL2           0.4     // IIR filter: smoothing value from 0.00-1.00
-#define SMOOTHING_LOADCELL3           0.4     // IIR filter: smoothing value from 0.00-1.00
+#define SMOOTHING_LOADCELL            0.4     // IIR filter: smoothing value from 0.00-1.00
 
 #define MINIMAL_CG_WEIGHT             10      // g     if lower, no CG is displayed (0mm)
 #define MINIMAL_TOTAL_WEIGHT          1       // g     if lower, weight = 0 is displayed
@@ -89,9 +87,6 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NON
 
 
 // **** Voltage measurement settings ****
-
-// Enable voltage measurement
-#define ENABLE_VOLTAGE                true
 
 // analog input pin
 #define VOLTAGE_PIN                   A0
@@ -121,6 +116,15 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NON
                     GND
 */
 
+// calculate voltage to percent
+#define ENABLE_PERCENTLIST            true
+
+// Battery type
+#define BAT_TYPE                      B_VOLT
+
+// Battery cells
+#define BAT_CELLS                     2
+
 
 
 // **** Wifi settings ****
@@ -137,7 +141,8 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NON
 #define PASSWORD_AP                 ""
 const char ip[4] =                  {1,2,3,4};    // default IP address
 
-#define ENABLE_MDNS                 false         // experimental (speed is slow): Enable mDNS to reach the webpage with hostname.local
+#define ENABLE_MDNS                 true          // enable mDNS to reach the webpage with hostname.local
+
 
 
 // **** Model memory settings ****
