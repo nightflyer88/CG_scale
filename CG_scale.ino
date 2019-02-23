@@ -4,11 +4,15 @@
                       (c) 2019 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "1.1.12b"
+#define CGSCALE_VERSION "1.2"
 /*
 
   ******************************************************************
   history:
+  V1.2    23.02.19      Add OTA (over the air update)
+                        mDNS default enabled
+                        add percentlists for many battery types
+                        memory optimization
   V1.1    02.02.19      Supports ESP8266, webpage integrated, STA and AP mode
   V1.0    12.01.19      first release
 
@@ -70,10 +74,8 @@
 #include "settings_ESP8266.h"
 #endif
 
-// HX711 constructor (dout pin, sck pint):
-HX711_ADC LoadCell_1(PIN_LOADCELL1_DOUT, PIN_LOADCELL1_PD_SCK);
-HX711_ADC LoadCell_2(PIN_LOADCELL2_DOUT, PIN_LOADCELL2_PD_SCK);
-HX711_ADC LoadCell_3(PIN_LOADCELL3_DOUT, PIN_LOADCELL3_PD_SCK);
+// HX711 constructor array (dout pin, sck pint):
+HX711_ADC LoadCell[]{HX711_ADC(PIN_LOADCELL1_DOUT, PIN_LOADCELL1_PD_SCK),HX711_ADC(PIN_LOADCELL2_DOUT, PIN_LOADCELL2_PD_SCK),HX711_ADC(PIN_LOADCELL3_DOUT, PIN_LOADCELL3_PD_SCK)};
 
 // webserver constructor
 #if defined(ESP8266)
@@ -82,101 +84,15 @@ IPAddress apIP(ip[0], ip[1], ip[2], ip[3]);
 File fsUploadFile;              // a File object to temporarily store the received file
 #endif
 
-// serial menu
-enum {
-  MENU_HOME,
-  MENU_LOADCELLS,
-  MENU_DISTANCE_X1,
-  MENU_DISTANCE_X2,
-  MENU_DISTANCE_X3,
-  MENU_REF_WEIGHT,
-  MENU_REF_CG,
-  MENU_AUTO_CALIBRATE,
-  MENU_LOADCELL1_CALIBRATION_FACTOR,
-  MENU_LOADCELL2_CALIBRATION_FACTOR,
-  MENU_LOADCELL3_CALIBRATION_FACTOR,
-  MENU_RESISTOR_R1,
-  MENU_RESISTOR_R2,
-  MENU_BATTERY_MEASUREMENT,
-  MENU_SHOW_ACTUAL,
-#if defined(ESP8266)
-  MENU_WIFI_INFO,
-#endif
-  MENU_RESET_DEFAULT
-};
-
-// EEprom parameter addresses
-enum {
-  P_NUMBER_LOADCELLS =                  1,
-  P_DISTANCE_X1 =                       2,
-  P_DISTANCE_X2 =                       P_DISTANCE_X1 + sizeof(float),
-  P_DISTANCE_X3 =                       P_DISTANCE_X2 + sizeof(float),
-  P_LOADCELL1_CALIBRATION_FACTOR =      P_DISTANCE_X3 + sizeof(float),
-  P_LOADCELL2_CALIBRATION_FACTOR =      P_LOADCELL1_CALIBRATION_FACTOR + sizeof(float),
-  P_LOADCELL3_CALIBRATION_FACTOR =      P_LOADCELL2_CALIBRATION_FACTOR + sizeof(float),
-  P_ENABLE_BATVOLT =                    P_LOADCELL3_CALIBRATION_FACTOR + sizeof(float),
-  P_REF_WEIGHT =                        P_ENABLE_BATVOLT + sizeof(float),
-  P_REF_CG =                            P_REF_WEIGHT + sizeof(float),
-  P_RESISTOR_R1 =                       P_REF_CG + sizeof(float),
-  P_RESISTOR_R2 =                       P_RESISTOR_R1 + sizeof(float),
-#if defined(__AVR__)
-  EEPROM_SIZE =                         P_RESISTOR_R2 + sizeof(float)
-#elif defined(ESP8266)
-  P_SSID_STA =                          P_RESISTOR_R2 + sizeof(float),
-  P_PASSWORD_STA =                      P_SSID_STA + MAX_SSID_PW_LENGHT + 1,
-  P_SSID_AP =                           P_PASSWORD_STA + MAX_SSID_PW_LENGHT + 1,
-  P_PASSWORD_AP =                       P_SSID_AP + MAX_SSID_PW_LENGHT + 1,
-  P_MODELNAME =                         P_PASSWORD_AP + MAX_SSID_PW_LENGHT + 1,
-  EEPROM_SIZE =                         P_MODELNAME + MAX_MODELNAME_LENGHT + 1
-#endif
-};
-
-// battery image 12x6
-static const unsigned char batteryImage[] U8X8_PROGMEM = {
-  0xfc, 0xff, 0x07, 0xf8, 0x01, 0xf8, 0x01, 0xf8, 0x07, 0xf8, 0xfc, 0xff
-};
-
-// weight image 18x18
-static const unsigned char weightImage[] U8X8_PROGMEM = {
-  0x00, 0x00, 0xfc, 0x00, 0x03, 0xfc, 0x80, 0x04, 0xfc, 0x80, 0x04, 0xfc,
-  0x80, 0x07, 0xfc, 0xf8, 0x7f, 0xfc, 0x08, 0x40, 0xfc, 0x08, 0x40, 0xfc,
-  0x08, 0x47, 0xfc, 0x84, 0x84, 0xfc, 0x84, 0x84, 0xfc, 0x04, 0x87, 0xfc,
-  0x04, 0x84, 0xfc, 0x02, 0x03, 0xfd, 0x02, 0x00, 0xfd, 0x02, 0x00, 0xfd,
-  0xfe, 0xff, 0xfd, 0x00, 0x00, 0xfc
-};
-
-// CG image 18x18
-static const unsigned char CGImage[] U8X8_PROGMEM = {
-  0x00, 0x02, 0xfc, 0xc0, 0x1f, 0xfc, 0x30, 0x7e, 0xfc, 0x08, 0xfe, 0xfc,
-  0x04, 0xfe, 0xfc, 0x04, 0xfe, 0xfd, 0x02, 0xfe, 0xfd, 0x02, 0xfe, 0xfd,
-  0x02, 0xfe, 0xff, 0xff, 0x01, 0xfd, 0xfe, 0x01, 0xfd, 0xfe, 0x01, 0xfd,
-  0xfe, 0x81, 0xfc, 0xfc, 0x81, 0xfc, 0xfc, 0x41, 0xfc, 0xf8, 0x31, 0xfc,
-  0xe0, 0x0f, 0xfc, 0x00, 0x01, 0xfc
-};
-
-// CG transverse axis image 18x18
-static const unsigned char CGtransImage[] U8X8_PROGMEM = {
-  0x00, 0x00, 0xfc, 0x00, 0x00, 0xfc, 0x00, 0x00, 0xfc, 0x04, 0x70, 0xfc,
-  0x04, 0x90, 0xfc, 0x04, 0x90, 0xfc, 0x04, 0x70, 0xfc, 0x04, 0x50, 0xfc,
-  0x04, 0x90, 0xfc, 0x3c, 0x90, 0xfc, 0x00, 0x00, 0xfc, 0x00, 0x00, 0xfc,
-  0x08, 0x40, 0xfc, 0x04, 0x80, 0xfc, 0x7e, 0xf8, 0xfd, 0x04, 0x80, 0xfc,
-  0x08, 0x40, 0xfc, 0x00, 0x00, 0xfc
-};
-
-// set default text
-static const String newValueText = "Set new value:";
+#include "defaults.h"
 
 // load default values
 uint8_t nLoadcells = NUMBER_LOADCELLS;
-float distanceX1 = DISTANCE_X1;
-float distanceX2 = DISTANCE_X2;
-float distanceX3 = DISTANCE_X3;
-float calFactorLoadcell1 = LOADCELL1_CALIBRATION_FACTOR;
-float calFactorLoadcell2 = LOADCELL2_CALIBRATION_FACTOR;
-float calFactorLoadcell3 = LOADCELL3_CALIBRATION_FACTOR;
-float resistorR1 = RESISTOR_R1;
-float resistorR2 = RESISTOR_R2;
-bool enableBatVolt = ENABLE_VOLTAGE;
+float distance[] = {DISTANCE_X1, DISTANCE_X2, DISTANCE_X3};
+float calFactorLoadcell[] = {LOADCELL1_CALIBRATION_FACTOR, LOADCELL2_CALIBRATION_FACTOR, LOADCELL3_CALIBRATION_FACTOR};
+float resistor[] = {RESISTOR_R1, RESISTOR_R2};
+uint8_t batType = BAT_TYPE;
+uint8_t batCells = BAT_CELLS;
 float refWeight = REF_WEIGHT;
 float refCG = REF_CG;
 #if defined(ESP8266)
@@ -187,12 +103,8 @@ char password_AP[MAX_SSID_PW_LENGHT + 1] = PASSWORD_AP;
 #endif
 
 // declare variables
-float weightLoadCell1 = 0;
-float weightLoadCell2 = 0;
-float weightLoadCell3 = 0;
-float lastWeightLoadCell1 = 0;
-float lastWeightLoadCell2 = 0;
-float lastWeightLoadCell3 = 0;
+float weightLoadCell[] = {0, 0, 0};
+float lastWeightLoadCell[] = {0, 0, 0};
 float weightTotal = 0;
 float CG_length = 0;
 float CG_trans = 0;
@@ -220,30 +132,35 @@ void resetCPU() {}
 
 
 // save calibration factor
-void saveCalFactor1() {
-  LoadCell_1.setCalFactor(calFactorLoadcell1);
-  EEPROM.put(P_LOADCELL1_CALIBRATION_FACTOR, calFactorLoadcell1);
+void saveCalFactor(int nLC) {
+  LoadCell[nLC].setCalFactor(calFactorLoadcell[nLC]);
+  EEPROM.put(P_LOADCELL1_CALIBRATION_FACTOR + (nLC * sizeof(float)), calFactorLoadcell[nLC]);
 #if defined(ESP8266)
   EEPROM.commit();
 #endif
 }
 
 
-void saveCalFactor2() {
-  LoadCell_2.setCalFactor(calFactorLoadcell2);
-  EEPROM.put(P_LOADCELL2_CALIBRATION_FACTOR, calFactorLoadcell2);
-#if defined(ESP8266)
-  EEPROM.commit();
-#endif
+void updateLoadcells(){
+  for (int i = LC1; i <= LC3; i++) {
+    if (i < nLoadcells) {
+      LoadCell[i].update();
+    }
+  }
 }
 
 
-void saveCalFactor3() {
-  LoadCell_3.setCalFactor(calFactorLoadcell3);
-  EEPROM.put(P_LOADCELL3_CALIBRATION_FACTOR, calFactorLoadcell3);
-#if defined(ESP8266)
-  EEPROM.commit();
-#endif
+void tareLoadcells(){
+  for (int i = LC1; i <= LC3; i++) {
+    if (i < nLoadcells) {
+      LoadCell[i].tare();
+    }
+  }
+}
+
+
+void printNewValueText(){
+  Serial.print(F("Set new value:"));
 }
 
 
@@ -255,22 +172,19 @@ bool runAutoCalibrate() {
     delay(100);
   }
   // calculate weight
-  float toWeightLoadCell2 = ((refCG - distanceX1) * refWeight) / distanceX2;
-  float toWeightLoadCell1 = refWeight - toWeightLoadCell2;
-  float toWeightLoadCell3 = 0;
+  float toWeightLoadCell[] = {0, 0, 0};
+  toWeightLoadCell[LC2] = ((refCG - distance[X1]) * refWeight) / distance[X2];
+  toWeightLoadCell[LC1] = refWeight - toWeightLoadCell[LC2];
   if (nLoadcells == 3) {
-    toWeightLoadCell1 = toWeightLoadCell1 / 2;
-    toWeightLoadCell3 = toWeightLoadCell1;
+    toWeightLoadCell[LC1] = toWeightLoadCell[LC1] / 2;
+    toWeightLoadCell[LC3] = toWeightLoadCell[LC1];
   }
   // calculate calibration factors
-  calFactorLoadcell1 = calFactorLoadcell1 / (toWeightLoadCell1 / weightLoadCell1);
-  calFactorLoadcell2 = calFactorLoadcell2 / (toWeightLoadCell2 / weightLoadCell2);
-  if (nLoadcells == 3) {
-    calFactorLoadcell3 = calFactorLoadcell3 / (toWeightLoadCell3 / weightLoadCell3);
+  for (int i = LC1; i <= LC3; i++) {
+    calFactorLoadcell[i] = calFactorLoadcell[i] / (toWeightLoadCell[i] / weightLoadCell[i]);
+    saveCalFactor(i);
   }
-  saveCalFactor1();
-  saveCalFactor2();
-  saveCalFactor3();
+  
   // finish
   Serial.println(F("done"));
 }
@@ -280,20 +194,14 @@ bool runAutoCalibrate() {
 bool getLoadcellError() {
   bool err = false;
 
-  if (LoadCell_1.getTareTimeoutFlag()) {
-    errMsg[++errMsgCnt] = "ERROR: Timeout TARE Lc1\n";
-    err = true;
-  }
-
-  if (LoadCell_2.getTareTimeoutFlag()) {
-    errMsg[++errMsgCnt] = "ERROR: Timeout TARE Lc2\n";
-    err = true;
-  }
-
-  if (nLoadcells == 3) {
-    if (LoadCell_3.getTareTimeoutFlag()) {
-      errMsg[++errMsgCnt] = "ERROR: Timeout TARE Lc3\n";
-      err = true;
+  for (int i = LC1; i <= LC3; i++) {
+    if (i < nLoadcells) {
+      if (LoadCell[i].getTareTimeoutFlag()) {
+        errMsg[++errMsgCnt] = "ERROR: Timeout TARE Lc";
+        errMsg[errMsgCnt] += (i + 1) ;
+        errMsg[errMsgCnt] += "\n";
+        err = true;
+      }
     }
   }
 
@@ -301,23 +209,43 @@ bool getLoadcellError() {
 }
 
 
-// print update progress screen
-void printUpdateProgress(unsigned int progress, unsigned int total) {
-  oledDisplay.firstPage();
-    do {
-      oledDisplay.setFont(u8g2_font_helvR08_tr);
-      oledDisplay.setCursor(0, 12);
-      oledDisplay.print(updateMsg);
+// Count percentage from cell voltage
+int percentBat(float cellVoltage) {
 
-      oledDisplay.setFont(u8g2_font_5x7_tr);
-      oledDisplay.setCursor(107, 35);
-      oledDisplay.printf("%u%%\r", (progress / (total / 100)));
+  int result = 0;
+  int elementCount = DATAPOINTS_PERCENTLIST;
+  byte batTypeArray = batType - 2;
 
-      oledDisplay.drawFrame(0,40,128,10);
-      oledDisplay.drawBox(0,40,(progress / (total / 128)),10);
-      
-    } while ( oledDisplay.nextPage() );
+  for (int i = 0; i < elementCount; i++) {
+    if (pgm_read_float( &percentList[batTypeArray][i][1]) == 100 ) {
+      elementCount = i;
+      break;
+    }
+  }
+  
+  float cellempty = pgm_read_float( &percentList[batTypeArray][0][0]);
+  float cellfull = pgm_read_float( &percentList[batTypeArray][elementCount][0]);
+
+  if (cellVoltage >= cellfull) {
+    result = 100;
+  } else if (cellVoltage <= cellempty) {
+    result = 0;
+  } else {
+    for (int i = 0; i <= elementCount; i++) {
+      float curVolt = pgm_read_float(&percentList[batTypeArray][i][0]);
+      if (curVolt >= cellVoltage && i > 0) {
+        float lastVolt = pgm_read_float(&percentList[batTypeArray][i-1][0]);
+        float curPercent = pgm_read_float(&percentList[batTypeArray][i][1]);
+        float lastPercent = pgm_read_float(&percentList[batTypeArray][i-1][1]);
+        result = float((cellVoltage - lastVolt) / (curVolt - lastVolt)) * (curPercent - lastPercent) + lastPercent;
+        break;
+      }
+    }
+  }
+
+  return result;
 }
+
 
 
 void setup() {
@@ -336,32 +264,22 @@ void setup() {
     nLoadcells = EEPROM.read(P_NUMBER_LOADCELLS);
   }
 
-  if (EEPROM.read(P_DISTANCE_X1) != 0xFF) {
-    EEPROM.get(P_DISTANCE_X1, distanceX1);
+  for (int i = LC1; i <= LC3; i++) {
+    if (EEPROM.read(P_DISTANCE_X1 + (i * sizeof(float))) != 0xFF) {
+      EEPROM.get(P_DISTANCE_X1 + (i * sizeof(float)), distance[i]);
+    }
+
+    if (EEPROM.read(P_LOADCELL1_CALIBRATION_FACTOR + (i * sizeof(float))) != 0xFF) {
+      EEPROM.get(P_LOADCELL1_CALIBRATION_FACTOR + (i * sizeof(float)), calFactorLoadcell[i]);
+    }
   }
 
-  if (EEPROM.read(P_DISTANCE_X2) != 0xFF) {
-    EEPROM.get(P_DISTANCE_X2, distanceX2);
+  if (EEPROM.read(P_BAT_TYPE) != 0xFF) {
+    batType = EEPROM.read(P_BAT_TYPE);
   }
 
-  if (EEPROM.read(P_DISTANCE_X3) != 0xFF) {
-    EEPROM.get(P_DISTANCE_X3, distanceX3);
-  }
-
-  if (EEPROM.read(P_LOADCELL1_CALIBRATION_FACTOR) != 0xFF) {
-    EEPROM.get(P_LOADCELL1_CALIBRATION_FACTOR, calFactorLoadcell1);
-  }
-
-  if (EEPROM.read(P_LOADCELL2_CALIBRATION_FACTOR) != 0xFF) {
-    EEPROM.get(P_LOADCELL2_CALIBRATION_FACTOR, calFactorLoadcell2);
-  }
-
-  if (EEPROM.read(P_LOADCELL3_CALIBRATION_FACTOR) != 0xFF) {
-    EEPROM.get(P_LOADCELL3_CALIBRATION_FACTOR, calFactorLoadcell3);
-  }
-
-  if (EEPROM.read(P_ENABLE_BATVOLT) != 0xFF) {
-    EEPROM.get(P_ENABLE_BATVOLT, enableBatVolt);
+  if (EEPROM.read(P_BATT_CELLS) != 0xFF) {
+    batCells = EEPROM.read(P_BATT_CELLS);
   }
 
   if (EEPROM.read(P_REF_WEIGHT) != 0xFF) {
@@ -372,12 +290,10 @@ void setup() {
     EEPROM.get(P_REF_CG, refCG);
   }
 
-  if (EEPROM.read(P_RESISTOR_R1) != 0xFF) {
-    EEPROM.get(P_RESISTOR_R1, resistorR1);
-  }
-
-  if (EEPROM.read(P_RESISTOR_R2) != 0xFF) {
-    EEPROM.get(P_RESISTOR_R2, resistorR2);
+  for (int i = R1; i <= R2; i++) {
+    if (EEPROM.read(P_RESISTOR_R1 + (i * sizeof(float))) != 0xFF) {
+      EEPROM.get(P_RESISTOR_R1 + (i * sizeof(float)), resistor[i]);
+    }
   }
 
 #if defined(ESP8266)
@@ -426,34 +342,21 @@ void setup() {
   } while ( oledDisplay.nextPage() );
 
   // init & tare Loadcells
-  LoadCell_1.begin();
-  LoadCell_1.setCalFactor(calFactorLoadcell1);
-
-  LoadCell_2.begin();
-  LoadCell_2.setCalFactor(calFactorLoadcell2);
-
-  if (nLoadcells == 3) {
-    LoadCell_3.begin();
-    LoadCell_3.setCalFactor(calFactorLoadcell3);
+  for (int i = LC1; i <= LC3; i++) {
+    if (i < nLoadcells) {
+      LoadCell[i].begin();
+      LoadCell[i].setCalFactor(calFactorLoadcell[i]);
+    }
   }
 
   // stabilize scale values
   while (millis() < STABILISINGTIME) {
-    LoadCell_1.update();
-    LoadCell_2.update();
-    if (nLoadcells == 3) {
-      LoadCell_3.update();
-    }
+    updateLoadcells();
   }
 
-  LoadCell_1.tare();
-  LoadCell_2.tare();
-  if (nLoadcells == 3) {
-    LoadCell_3.tare();
-  }
+  tareLoadcells();
 
   getLoadcellError();
-
 
 #if defined(ESP8266)
 
@@ -591,16 +494,16 @@ void setup() {
     // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
     updateMsg = "Updating " + type;
   });
-  
+
   ArduinoOTA.onEnd([]() {
     updateMsg = "successful..";
-    printUpdateProgress(100,100);
+    printUpdateProgress(100, 100);
   });
-  
+
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    printUpdateProgress(progress,total);
+    printUpdateProgress(progress, total);
   });
-  
+
   ArduinoOTA.onError([](ota_error_t error) {
     if (error == OTA_AUTH_ERROR) {
       updateMsg = "Auth Failed";
@@ -613,9 +516,9 @@ void setup() {
     } else if (error == OTA_END_ERROR) {
       updateMsg = "End Failed";
     }
-    printUpdateProgress(0,100);
+    printUpdateProgress(0, 100);
   });
-  
+
   ArduinoOTA.begin();
 
 #if ENABLE_MDNS
@@ -640,32 +543,21 @@ void loop() {
   server.handleClient();
 #endif
 
-  LoadCell_1.update();
-  LoadCell_2.update();
-  if (nLoadcells == 3) {
-    LoadCell_3.update();
-  }
+  updateLoadcells();
 
   // update loadcell values
   if ((millis() - lastTimeLoadcell) > UPDATE_INTERVAL_LOADCELL) {
     lastTimeLoadcell = millis();
 
     // get Loadcell weights
-    weightLoadCell1 = LoadCell_1.getData();
-    weightLoadCell2 = LoadCell_2.getData();
-    if (nLoadcells == 3) {
-      weightLoadCell3 = LoadCell_3.getData();
+    for (int i = LC1; i <= LC3; i++) {
+      if (i < nLoadcells) {
+        weightLoadCell[i] = LoadCell[i].getData();
+        // IIR filter
+        weightLoadCell[i] = weightLoadCell[i] + SMOOTHING_LOADCELL * (lastWeightLoadCell[i] - weightLoadCell[i]);
+        lastWeightLoadCell[i] = weightLoadCell[i];
+      }
     }
-
-    // IIR filter
-    weightLoadCell1 = weightLoadCell1 + SMOOTHING_LOADCELL1 * (lastWeightLoadCell1 - weightLoadCell1);
-    lastWeightLoadCell1 = weightLoadCell1;
-
-    weightLoadCell2 = weightLoadCell2 + SMOOTHING_LOADCELL2 * (lastWeightLoadCell2 - weightLoadCell2);
-    lastWeightLoadCell2 = weightLoadCell2;
-
-    weightLoadCell3 = weightLoadCell3 + SMOOTHING_LOADCELL3 * (lastWeightLoadCell3 - weightLoadCell3);
-    lastWeightLoadCell3 = weightLoadCell3;
   }
 
   // update display and serial menu
@@ -674,18 +566,18 @@ void loop() {
     lastTimeMenu = millis();
 
     // total model weight
-    weightTotal = weightLoadCell1 + weightLoadCell2 + weightLoadCell3;
+    weightTotal = weightLoadCell[LC1] + weightLoadCell[LC2] + weightLoadCell[LC3];
     if (weightTotal < MINIMAL_TOTAL_WEIGHT && weightTotal > MINIMAL_TOTAL_WEIGHT * -1) {
       weightTotal = 0;
     }
 
     if (weightTotal > MINIMAL_CG_WEIGHT) {
       // CG longitudinal axis
-      CG_length = ((weightLoadCell2 * distanceX2) / weightTotal) + distanceX1;
+      CG_length = ((weightLoadCell[LC2] * distance[X2]) / weightTotal) + distance[X1];
 
       // CG transverse axis
       if (nLoadcells == 3) {
-        CG_trans = (distanceX3 / 2) - (((weightLoadCell1 + weightLoadCell2 / 2) * distanceX3) / weightTotal);
+        CG_trans = (distance[X3] / 2) - (((weightLoadCell[LC1] + weightLoadCell[LC2] / 2) * distance[X3]) / weightTotal);
       }
     } else {
       CG_length = 0;
@@ -693,8 +585,13 @@ void loop() {
     }
 
     // read battery voltage
-    if (enableBatVolt) {
-      batVolt = (analogRead(VOLTAGE_PIN) / 1024.0) * V_REF * ((resistorR1 + resistorR2) / resistorR2) / 1000.0;
+    if (batType > B_OFF) {
+      batVolt = (analogRead(VOLTAGE_PIN) / 1024.0) * V_REF * ((resistor[R1] + resistor[R2]) / resistor[R2]) / 1000.0;
+#if ENABLE_PERCENTLIST
+      if (batType > B_VOLT) {
+        batVolt = percentBat(batVolt / batCells);
+      }
+#endif
     }
 
     // print to display
@@ -704,7 +601,7 @@ void loop() {
     if (nLoadcells == 2) {
       pos_weightTotal = 17;
       pos_CG_length = 45;
-      if (!enableBatVolt) {
+      if (batType == 0) {
         pos_weightTotal = 12;
         pos_CG_length = 40;
       }
@@ -714,13 +611,22 @@ void loop() {
     do {
       if (errMsgCnt == 0) {
         // print battery
-        if (enableBatVolt) {
+        if (batType > B_OFF) {
           oledDisplay.drawXBMP(88, 1, 12, 6, batteryImage);
-          dtostrf(batVolt, 2, 2, buff);
+          if (batType == B_VOLT) {
+            dtostrf(batVolt, 2, 2, buff);
+          } else {
+            dtostrf(batVolt, 3, 0, buff);
+            oledDisplay.drawBox(89, 2, (batVolt / (100 / 8)), 4);
+          }
           oledDisplay.setFont(u8g2_font_5x7_tr);
           oledDisplay.setCursor(123 - oledDisplay.getStrWidth(buff), 7);
           oledDisplay.print(buff);
-          oledDisplay.print(F("V"));
+          if (batType == B_VOLT) {
+            oledDisplay.print(F("V"));
+          } else {
+            oledDisplay.print(F("%"));
+          }
         }
 
         // print total weight
@@ -775,27 +681,9 @@ void loop() {
             menuPage = 0;
             updateMenu = true;
             break;
-          case MENU_DISTANCE_X1:
-            distanceX1 = Serial.parseFloat();
-            EEPROM.put(P_DISTANCE_X1, distanceX1);
-#if defined(ESP8266)
-            EEPROM.commit();
-#endif
-            menuPage = 0;
-            updateMenu = true;
-            break;
-          case MENU_DISTANCE_X2:
-            distanceX2 = Serial.parseFloat();
-            EEPROM.put(P_DISTANCE_X2, distanceX2);
-#if defined(ESP8266)
-            EEPROM.commit();
-#endif
-            menuPage = 0;
-            updateMenu = true;
-            break;
-          case MENU_DISTANCE_X3:
-            distanceX3 = Serial.parseFloat();
-            EEPROM.put(P_DISTANCE_X3, distanceX3);
+          case MENU_DISTANCE_X1 ... MENU_DISTANCE_X3:
+            distance[menuPage - MENU_DISTANCE_X1] = Serial.parseFloat();
+            EEPROM.put(P_DISTANCE_X1 + ((menuPage - MENU_DISTANCE_X1) * sizeof(float)), distance[menuPage - MENU_DISTANCE_X1]);
 #if defined(ESP8266)
             EEPROM.commit();
 #endif
@@ -823,40 +711,19 @@ void loop() {
           case MENU_AUTO_CALIBRATE:
             if (Serial.read() == 'J') {
               runAutoCalibrate();
-              menuPage = 0;
-              updateMenu = true;
             }
-            break;
-          case MENU_LOADCELL1_CALIBRATION_FACTOR:
-            calFactorLoadcell1 = Serial.parseFloat();
-            saveCalFactor1();
             menuPage = 0;
             updateMenu = true;
             break;
-          case MENU_LOADCELL2_CALIBRATION_FACTOR:
-            calFactorLoadcell2 = Serial.parseFloat();
-            saveCalFactor2();
+          case MENU_LOADCELL1_CALIBRATION_FACTOR ... MENU_LOADCELL3_CALIBRATION_FACTOR:
+            calFactorLoadcell[menuPage - MENU_LOADCELL1_CALIBRATION_FACTOR] = Serial.parseFloat();
+            saveCalFactor(menuPage - MENU_LOADCELL1_CALIBRATION_FACTOR);
             menuPage = 0;
             updateMenu = true;
             break;
-          case MENU_LOADCELL3_CALIBRATION_FACTOR:
-            calFactorLoadcell3 = Serial.parseFloat();
-            saveCalFactor3();
-            menuPage = 0;
-            updateMenu = true;
-            break;
-          case MENU_RESISTOR_R1:
-            resistorR1 = Serial.parseFloat();
-            EEPROM.put(P_RESISTOR_R1, resistorR1);
-#if defined(ESP8266)
-            EEPROM.commit();
-#endif
-            menuPage = 0;
-            updateMenu = true;
-            break;
-          case MENU_RESISTOR_R2:
-            resistorR2 = Serial.parseFloat();
-            EEPROM.put(P_RESISTOR_R2, resistorR2);
+          case MENU_RESISTOR_R1 ... MENU_RESISTOR_R2:
+            resistor[menuPage - MENU_RESISTOR_R1] = Serial.parseFloat();
+            EEPROM.put(P_RESISTOR_R1 + ((menuPage - MENU_RESISTOR_R1) * sizeof(float)), resistor[menuPage - MENU_RESISTOR_R1]);
 #if defined(ESP8266)
             EEPROM.commit();
 #endif
@@ -864,12 +731,17 @@ void loop() {
             updateMenu = true;
             break;
           case MENU_BATTERY_MEASUREMENT:
-            if (Serial.read() == 'J') {
-              enableBatVolt = true;
-            } else {
-              enableBatVolt = false;
-            }
-            EEPROM.put(P_ENABLE_BATVOLT, enableBatVolt);
+            batType = Serial.parseInt();
+            EEPROM.put(P_BAT_TYPE, batType);
+#if defined(ESP8266)
+            EEPROM.commit();
+#endif
+            menuPage = 0;
+            updateMenu = true;
+            break;
+          case MENU_BATTERY_CELLS:
+            batCells = Serial.parseInt();
+            EEPROM.put(P_BATT_CELLS, batCells);
 #if defined(ESP8266)
             EEPROM.commit();
 #endif
@@ -910,186 +782,166 @@ void loop() {
 
       switch (menuPage)
       {
-        case MENU_HOME:
-          Serial.print(F("\n\n********************************************\nCG scale by M.Lehmann - V"));
-          Serial.print(CGSCALE_VERSION);
-          Serial.print(F("\n\n"));
+        case MENU_HOME: {
+            Serial.print(F("\n\n********************************************\nCG scale by M.Lehmann - V"));
+            Serial.print(CGSCALE_VERSION);
+            Serial.print(F("\n\n"));
 
-          Serial.print(MENU_LOADCELLS);
-          Serial.print(F("  - Set number of load cells ("));
-          Serial.print(nLoadcells);
+            Serial.print(MENU_LOADCELLS);
+            Serial.print(F("  - Set number of load cells ("));
+            Serial.print(nLoadcells);
+            Serial.print(F(")\n"));
 
-          Serial.print(F(")\n"));
-          Serial.print(MENU_DISTANCE_X1);
-          Serial.print(F("  - Set distance X1 ("));
-          Serial.print(distanceX1);
+            for (int i = X1; i <= X3; i++) {
+              Serial.print(MENU_DISTANCE_X1 + i);
+              Serial.print(F("  - Set distance X"));
+              Serial.print(i+1);
+              Serial.print(F(" ("));
+              Serial.print(distance[i]);
+              Serial.print(F("mm)\n"));
+            }
 
-          Serial.print(F("mm)\n"));
-          Serial.print(MENU_DISTANCE_X2);
-          Serial.print(F("  - Set distance X2 ("));
-          Serial.print(distanceX2);
+            Serial.print(MENU_REF_WEIGHT);
+            Serial.print(F("  - Set reference weight ("));
+            Serial.print(refWeight);
+            Serial.print(F("g)\n"));
 
-          Serial.print(F("mm)\n"));
-          Serial.print(MENU_DISTANCE_X3);
-          Serial.print(F("  - Set distance X3 ("));
-          Serial.print(distanceX3);
+            Serial.print(MENU_REF_CG);
+            Serial.print(F("  - Set reference CG ("));
+            Serial.print(refCG);
+            Serial.print(F("mm)\n"));
 
-          Serial.print(F("mm)\n"));
-          Serial.print(MENU_REF_WEIGHT);
-          Serial.print(F("  - Set reference weight ("));
-          Serial.print(refWeight);
+            Serial.print(MENU_AUTO_CALIBRATE);
+            Serial.print(F("  - Start autocalibration\n"));
 
-          Serial.print(F("g)\n"));
-          Serial.print(MENU_REF_CG);
-          Serial.print(F("  - Set reference CG ("));
-          Serial.print(refCG);
+            for (int i = LC1; i <= LC3; i++) {
+              Serial.print(MENU_LOADCELL1_CALIBRATION_FACTOR + i);
+              if((MENU_LOADCELL1_CALIBRATION_FACTOR + i) < 10) Serial.print(F(" "));
+              Serial.print(F(" - Set calibration factor of load cell "));
+              Serial.print(i+1);
+              Serial.print(F(" ("));
+              Serial.print(calFactorLoadcell[i]);
+              Serial.print(F(")\n"));
+            }
 
-          Serial.print(F("mm)\n"));
-          Serial.print(MENU_AUTO_CALIBRATE);
-          Serial.print(F("  - Start autocalibration\n"));
+            for (int i = R1; i <= R2; i++) {
+              Serial.print(MENU_RESISTOR_R1 + i);
+              Serial.print(F(" - Set value of resistor R"));
+              Serial.print(i+1);
+              Serial.print(F(" ("));
+              Serial.print(resistor[i]);
+              Serial.print(F("ohm)\n"));
+            }
 
-          Serial.print(MENU_LOADCELL1_CALIBRATION_FACTOR);
-          Serial.print(F("  - Set calibration factor of load cell 1 ("));
-          Serial.print(calFactorLoadcell1);
+            Serial.print(MENU_BATTERY_MEASUREMENT);
+            Serial.print(F(" - Set battery type ("));
+            Serial.print(battTypName[batType]);
+            Serial.print(F(")\n"));
 
-          Serial.print(F(")\n"));
-          Serial.print(MENU_LOADCELL2_CALIBRATION_FACTOR);
-          Serial.print(F("  - Set calibration factor of load cell 2 ("));
-          Serial.print(calFactorLoadcell2);
+            Serial.print(MENU_BATTERY_CELLS);
+            Serial.print(F(" - Set number of battery cells ("));
+            Serial.print(batCells);
+            Serial.print(F(")\n"));
 
-          Serial.print(F(")\n"));
-          Serial.print(MENU_LOADCELL3_CALIBRATION_FACTOR);
-          Serial.print(F(" - Set calibration factor of load cell 3 ("));
-          Serial.print(calFactorLoadcell3);
-
-          Serial.print(F(")\n"));
-          Serial.print(MENU_RESISTOR_R1);
-          Serial.print(F(" - Set value of resistor R1 ("));
-          Serial.print(resistorR1);
-
-          Serial.print(F("ohm)\n"));
-          Serial.print(MENU_RESISTOR_R2);
-          Serial.print(F(" - Set value of resistor R2 ("));
-          Serial.print(resistorR2);
-
-          Serial.print(F("ohm)\n"));
-          Serial.print(MENU_BATTERY_MEASUREMENT);
-          Serial.print(F(" - Enable battery voltage measurement ("));
-          if (enableBatVolt) {
-            Serial.print(F("enabled)\n"));
-          } else {
-            Serial.print(F("disabled)\n"));
-          }
-
-          Serial.print(MENU_SHOW_ACTUAL);
-          Serial.print(F(" - Show actual values\n"));
+            Serial.print(MENU_SHOW_ACTUAL);
+            Serial.print(F(" - Show actual values\n"));
 
 #if defined(ESP8266)
-          Serial.print(MENU_WIFI_INFO);
-          Serial.print(F(" - Show WiFi network info\n"));
+            Serial.print(MENU_WIFI_INFO);
+            Serial.print(F(" - Show WiFi network info\n"));
 #endif
 
-          Serial.print(MENU_RESET_DEFAULT);
-          Serial.print(F(" - Reset to factory defaults\n"));
+            Serial.print(MENU_RESET_DEFAULT);
+            Serial.print(F(" - Reset to factory defaults\n"));
 
-          Serial.print(F("\n"));
-          for (int i = 1; i <= errMsgCnt; i++) {
-            Serial.print(errMsg[i]);
+            Serial.print(F("\n"));
+            for (int i = 1; i <= errMsgCnt; i++) {
+              Serial.print(errMsg[i]);
+            }
+
+            Serial.print(F("\nPlease choose the menu number:"));
+
+            updateMenu = false;
+            break;
           }
-
-          Serial.print(F("\nPlease choose the menu number:"));
-
-          updateMenu = false;
-          break;
         case MENU_LOADCELLS:
           Serial.print(F("\n\nNumber of load cells: "));
           Serial.println(nLoadcells);
-          Serial.print(newValueText);
+          printNewValueText();
           updateMenu = false;
           break;
-        case MENU_DISTANCE_X1:
-          Serial.print(F("\n\nDistance X1: "));
-          Serial.print(distanceX1);
+        case MENU_DISTANCE_X1 ... MENU_DISTANCE_X3:
+          Serial.print("\n\nDistance X");
+          Serial.print(menuPage - MENU_DISTANCE_X1 + 1);
+          Serial.print(F(": "));
+          Serial.print(distance[menuPage - MENU_DISTANCE_X1]);
           Serial.print(F("mm\n"));
-          Serial.print(newValueText);
-          updateMenu = false;
-          break;
-        case MENU_DISTANCE_X2:
-          Serial.print(F("\n\nDistance X2: "));
-          Serial.print(distanceX2);
-          Serial.print(F("mm\n"));
-          Serial.print(newValueText);
-          updateMenu = false;
-          break;
-        case MENU_DISTANCE_X3:
-          Serial.print(F("\n\nDistance X3: "));
-          Serial.print(distanceX3);
-          Serial.print(F("mm\n"));
-          Serial.print(newValueText);
+          printNewValueText();
           updateMenu = false;
           break;
         case MENU_REF_WEIGHT:
           Serial.print(F("\n\nReference weight: "));
           Serial.print(refWeight);
           Serial.print(F("g\n"));
-          Serial.print(newValueText);
+          printNewValueText();
           updateMenu = false;
           break;
         case MENU_REF_CG:
           Serial.print(F("\n\nReference CG: "));
           Serial.print(refCG);
           Serial.print(F("mm\n"));
-          Serial.print(newValueText);
+          printNewValueText();
           updateMenu = false;
           break;
         case MENU_AUTO_CALIBRATE:
           Serial.print(F("\n\nPlease put the reference weight on the scale.\nStart auto calibration (J/N)?\n"));
           updateMenu = false;
           break;
-        case MENU_LOADCELL1_CALIBRATION_FACTOR:
-          Serial.print(F("\n\nCalibration factor of load cell 1: "));
-          Serial.println(calFactorLoadcell1);
-          Serial.print(newValueText);
+        case MENU_LOADCELL1_CALIBRATION_FACTOR ... MENU_LOADCELL3_CALIBRATION_FACTOR:
+          Serial.print("\n\nCalibration factor of load cell ");
+          Serial.print(menuPage - MENU_LOADCELL1_CALIBRATION_FACTOR + 1);
+          Serial.print(F(": "));
+          Serial.println(calFactorLoadcell[menuPage - MENU_LOADCELL1_CALIBRATION_FACTOR]);
+          printNewValueText();
           updateMenu = false;
           break;
-        case MENU_LOADCELL2_CALIBRATION_FACTOR:
-          Serial.print(F("\n\nCalibration factor of load cell 2: "));
-          Serial.println(calFactorLoadcell2);
-          Serial.print(newValueText);
+        case MENU_RESISTOR_R1 ... MENU_RESISTOR_R2:
+          Serial.print(F("\n\nValue of resistor R"));
+          Serial.print(menuPage - MENU_RESISTOR_R1 + 1);
+          Serial.print(F(": "));
+          Serial.println(resistor[menuPage - MENU_RESISTOR_R1]);
+          printNewValueText();
           updateMenu = false;
           break;
-        case MENU_LOADCELL3_CALIBRATION_FACTOR:
-          Serial.print(F("\n\nCalibration factor of load cell 3: "));
-          Serial.println(calFactorLoadcell3);
-          Serial.print(newValueText);
-          updateMenu = false;
-          break;
-        case MENU_RESISTOR_R1:
-          Serial.print(F("\n\nValue of resistor R1: "));
-          Serial.println(resistorR1);
-          Serial.print(newValueText);
-          updateMenu = false;
-          break;
-        case MENU_RESISTOR_R2:
-          Serial.print(F("\n\nValue of resistor R2: "));
-          Serial.println(resistorR2);
-          Serial.print(newValueText);
-          updateMenu = false;
-          break;
-        case MENU_BATTERY_MEASUREMENT:
-          Serial.print(F("\n\nEnable battery voltage measurement (J/N)?\n"));
+        case MENU_BATTERY_MEASUREMENT: {
+            Serial.print(F("\n\nBattery type: "));
+            Serial.println(battTypName[batType]);
+            for (int i = 0; i < NUMBER_BAT_TYPES; i++) {
+              Serial.print(i);
+              Serial.print(" = ");
+              Serial.println(battTypName[i]);
+            }
+            printNewValueText();
+            updateMenu = false;
+            break;
+          }
+        case MENU_BATTERY_CELLS:
+          Serial.print(F("\n\nBattery cells: "));
+          Serial.println(batCells);
+          printNewValueText();
           updateMenu = false;
           break;
         case MENU_SHOW_ACTUAL:
-          Serial.print(F("Lc1: "));
-          Serial.print(weightLoadCell1);
-          Serial.print(F("g  Lc2: "));
-          Serial.print(weightLoadCell2);
-          if (nLoadcells == 3) {
-            Serial.print(F("g  Lc3: "));
-            Serial.print(weightLoadCell3);
+          for (int i = LC1; i <= LC3; i++) {
+            if (i < nLoadcells) {
+              Serial.print(F("Lc"));
+              Serial.print(i + 1);
+              Serial.print(F(": "));
+              Serial.print(weightLoadCell[i]);
+              Serial.print(F("g  "));
+            }
           }
-          Serial.print(F("g  Total weight: "));
+          Serial.print(F("Total weight: "));
           Serial.print(weightTotal);
           Serial.print(F("g  CG length: "));
           Serial.print(CG_length);
@@ -1098,10 +950,14 @@ void loop() {
             Serial.print(CG_trans);
             Serial.print(F("mm"));
           }
-          if (enableBatVolt) {
+          if (batType > B_OFF) {
             Serial.print(F("  Battery:"));
             Serial.print(batVolt);
-            Serial.print(F("V"));
+            if (batType == B_VOLT) {
+              Serial.print(F("V"));
+            } else {
+              Serial.print(F("%"));
+            }
           }
           Serial.println();
           break;
@@ -1165,6 +1021,7 @@ void loop() {
 }
 
 
+
 #if defined(ESP8266)
 
 // send headvalues to client
@@ -1193,9 +1050,15 @@ void getValue() {
   dtostrf(CG_trans, 5, 1, buff);
   response += buff;
   response += "mm&";
-  dtostrf(batVolt, 5, 2, buff);
-  response += buff;
-  response += "V";
+  if (batType == B_VOLT) {
+    dtostrf(batVolt, 5, 2, buff);
+    response += buff;
+    response += "V";
+  } else {
+    dtostrf(batVolt, 5, 0, buff);
+    response += buff;
+    response += "%";
+  }
   server.send(200, "text/html", response);
 }
 
@@ -1204,13 +1067,13 @@ void getValue() {
 void getRawValue() {
   char buff[8];
   String response = "";
-  dtostrf(weightLoadCell1, 5, 1, buff);
+  dtostrf(weightLoadCell[LC1], 5, 1, buff);
   response += buff;
   response += "g&";
-  dtostrf(weightLoadCell2, 5, 1, buff);
+  dtostrf(weightLoadCell[LC2], 5, 1, buff);
   response += buff;
   response += "g&";
-  dtostrf(weightLoadCell3, 5, 1, buff);
+  dtostrf(weightLoadCell[LC3], 5, 1, buff);
   response += buff;
   response += "g";
   server.send(200, "text/html", response);
@@ -1245,31 +1108,25 @@ void getParameter() {
   // parameter list
   response += nLoadcells;
   response += "&";
-  response += distanceX1;
-  response += "&";
-  response += distanceX2;
-  response += "&";
-  response += distanceX3;
-  response += "&";
+  for (int i = X1; i <= X3; i++) {
+    response += distance[i];
+    response += "&";
+  }
   response += refWeight;
   response += "&";
   response += refCG;
   response += "&";
-  response += calFactorLoadcell1;
-  response += "&";
-  response += calFactorLoadcell2;
-  response += "&";
-  response += calFactorLoadcell3;
-  response += "&";
-  response += resistorR1;
-  response += "&";
-  response += resistorR2;
-  response += "&";
-  if (enableBatVolt) {
-    response += "ON";
-  } else {
-    response += "OFF";
+  for (int i = LC1; i <= LC3; i++) {
+    response += calFactorLoadcell[i];
+    response += "&";
   }
+  for (int i = R1; i <= R2; i++) {
+    response += resistor[i];
+    response += "&";
+  }
+  response += batType;
+  response += "&";
+  response += batCells;
   response += "&";
   response += ssid_STA;
   response += "&";
@@ -1310,41 +1167,36 @@ void getWiFiNetworks() {
 
 // save parameters
 void saveParameter() {
-  if (server.hasArg("nLoadcells")) nLoadcells = server.arg("nLoadcells").toFloat();
-  if (server.hasArg("distanceX1")) distanceX1 = server.arg("distanceX1").toFloat();
-  if (server.hasArg("distanceX2")) distanceX2 = server.arg("distanceX2").toFloat();
-  if (server.hasArg("distanceX3")) distanceX3 = server.arg("distanceX3").toFloat();
+  if (server.hasArg("nLoadcells")) nLoadcells = server.arg("nLoadcells").toInt();
+  if (server.hasArg("distanceX1")) distance[X1] = server.arg("distanceX1").toFloat();
+  if (server.hasArg("distanceX2")) distance[X2] = server.arg("distanceX2").toFloat();
+  if (server.hasArg("distanceX3")) distance[X3] = server.arg("distanceX3").toFloat();
   if (server.hasArg("refWeight")) refWeight = server.arg("refWeight").toFloat();
   if (server.hasArg("refCG")) refCG = server.arg("refCG").toFloat();
-  if (server.hasArg("calFactorLoadcell1")) calFactorLoadcell1 = server.arg("calFactorLoadcell1").toFloat();
-  if (server.hasArg("calFactorLoadcell2")) calFactorLoadcell2 = server.arg("calFactorLoadcell2").toFloat();
-  if (server.hasArg("calFactorLoadcell3")) calFactorLoadcell3 = server.arg("calFactorLoadcell3").toFloat();
-  if (server.hasArg("resistorR1")) resistorR1 = server.arg("resistorR1").toFloat();
-  if (server.hasArg("resistorR2")) resistorR2 = server.arg("resistorR2").toFloat();
-  if (server.hasArg("enableBatVolt")) {
-    if (server.arg("enableBatVolt") == "ON") {
-      enableBatVolt = true;
-    } else {
-      enableBatVolt = false;
-    }
-  }
+  if (server.hasArg("calFactorLoadcell1")) calFactorLoadcell[LC1] = server.arg("calFactorLoadcell1").toFloat();
+  if (server.hasArg("calFactorLoadcell2")) calFactorLoadcell[LC2] = server.arg("calFactorLoadcell2").toFloat();
+  if (server.hasArg("calFactorLoadcell3")) calFactorLoadcell[LC3] = server.arg("calFactorLoadcell3").toFloat();
+  if (server.hasArg("resistorR1")) resistor[R1] = server.arg("resistorR1").toFloat();
+  if (server.hasArg("resistorR2")) resistor[R2] = server.arg("resistorR2").toFloat();
+  if (server.hasArg("batType")) batType = server.arg("batType").toInt();
+  if (server.hasArg("batCells")) batCells = server.arg("batCells").toInt();
   if (server.hasArg("ssid_STA")) server.arg("ssid_STA").toCharArray(ssid_STA, MAX_SSID_PW_LENGHT + 1);
   if (server.hasArg("password_STA")) server.arg("password_STA").toCharArray(password_STA, MAX_SSID_PW_LENGHT + 1);
   if (server.hasArg("ssid_AP")) server.arg("ssid_AP").toCharArray(ssid_AP, MAX_SSID_PW_LENGHT + 1);
   if (server.hasArg("password_AP")) server.arg("password_AP").toCharArray(password_AP, MAX_SSID_PW_LENGHT + 1);
 
   EEPROM.put(P_NUMBER_LOADCELLS, nLoadcells);
-  EEPROM.put(P_DISTANCE_X1, distanceX1);
-  EEPROM.put(P_DISTANCE_X2, distanceX2);
-  EEPROM.put(P_DISTANCE_X3, distanceX3);
+  for (int i = LC1; i <= LC3; i++) {
+    EEPROM.put(P_DISTANCE_X1 + (i * sizeof(float)), distance[i]);
+    saveCalFactor(i);
+  }
   EEPROM.put(P_REF_WEIGHT, refWeight);
   EEPROM.put(P_REF_CG, refCG);
-  saveCalFactor1();
-  saveCalFactor2();
-  saveCalFactor3();
-  EEPROM.put(P_RESISTOR_R1, resistorR1);
-  EEPROM.put(P_RESISTOR_R2, resistorR2);
-  EEPROM.put(P_ENABLE_BATVOLT, enableBatVolt);
+  for (int i = R1; i <= R2; i++) {
+    EEPROM.put(P_RESISTOR_R1 + (i * sizeof(float)), resistor[i]);
+  }
+  EEPROM.put(P_BAT_TYPE, batType);
+  EEPROM.put(P_BATT_CELLS, batCells);
   EEPROM.put(P_SSID_STA, ssid_STA);
   EEPROM.put(P_PASSWORD_STA, password_STA);
   EEPROM.put(P_SSID_AP, ssid_AP);
@@ -1367,11 +1219,7 @@ void autoCalibrate() {
 
 // tare cg scale
 void runTare() {
-  LoadCell_1.tare();
-  LoadCell_2.tare();
-  if (nLoadcells == 3) {
-    LoadCell_3.tare();
-  }
+  tareLoadcells();
   if (!getLoadcellError()) {
     server.send(200, "text/plain", "tare completed");
     return;
@@ -1550,9 +1398,9 @@ bool openModelJson(String modelName) {
     if (root.containsKey(modelName)) {
       JsonObject& object = root[modelName];
       // load parameters from model
-      distanceX1 = object["x1"];
-      distanceX2 = object["x2"];
-      distanceX3 = object["x3"];
+      distance[X1] = object["x1"];
+      distance[X2] = object["x2"];
+      distance[X3] = object["x3"];
     } else {
       return false;
     }
@@ -1613,10 +1461,30 @@ void writeModelData(JsonObject& object) {
   object["wt"] = weightTotal;
   object["cg"] = CG_length;
   object["cglr"] = CG_trans;
-  object["x1"] = distanceX1;
-  object["x2"] = distanceX2;
-  object["x3"] = distanceX3;
+  object["x1"] = distance[X1];
+  object["x2"] = distance[X2];
+  object["x3"] = distance[X3];
 }
+
+
+// print update progress screen
+void printUpdateProgress(unsigned int progress, unsigned int total) {
+  oledDisplay.firstPage();
+  do {
+    oledDisplay.setFont(u8g2_font_helvR08_tr);
+    oledDisplay.setCursor(0, 12);
+    oledDisplay.print(updateMsg);
+
+    oledDisplay.setFont(u8g2_font_5x7_tr);
+    oledDisplay.setCursor(107, 35);
+    oledDisplay.printf("%u%%\r", (progress / (total / 100)));
+
+    oledDisplay.drawFrame(0, 40, 128, 10);
+    oledDisplay.drawBox(0, 40, (progress / (total / 128)), 10);
+
+  } while ( oledDisplay.nextPage() );
+}
+
 
 // convert time to string
 char * TimeToString(unsigned long t)
