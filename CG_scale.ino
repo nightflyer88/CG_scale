@@ -4,11 +4,14 @@
                       (c) 2019 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "1.2"
+#define CGSCALE_VERSION "1.2.1"
 /*
 
   ******************************************************************
   history:
+  V1.2.1  31.03.19      small bug fixed 
+                        values in model database are rounded
+                        mDNS and OTA did not work in AP mode
   V1.2    23.02.19      Add OTA (over the air update)
                         mDNS default enabled
                         add percentlists for many battery types
@@ -360,6 +363,24 @@ void setup() {
 
 #if defined(ESP8266)
 
+  // Set Hostname
+  String hostname = "disabled";
+#if ENABLE_MDNS
+  hostname = ssid_AP;
+  hostname.replace(" ", "");
+  hostname.toLowerCase();
+  if (!MDNS.begin(hostname, WiFi.localIP())) {
+    hostname = "mDNS failed";
+  }else{
+    hostname += ".local";
+  }
+#endif
+  wifiMsg += TimeToString(millis());
+  wifiMsg += " Hostname: ";
+  wifiMsg += hostname;
+  wifiMsg += "\n";
+  
+
   // Start by connecting to a WiFi network
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid_STA, password_STA);
@@ -407,22 +428,6 @@ void setup() {
     wifiMsg += WiFi.localIP().toString();
   }
 
-  // init mDNS
-  String hostName = "disabled";
-#if ENABLE_MDNS
-  hostName = ssid_AP;
-  hostName.replace(" ", "");
-  hostName.toLowerCase();
-  char hostString[32];
-  hostName.toCharArray(hostString, 32);
-  MDNS.begin(hostString);
-  hostName += ".local";
-#endif
-  wifiMsg += "\n";
-  wifiMsg += TimeToString(millis());
-  wifiMsg += " Hostname: ";
-  wifiMsg += hostName;
-
   // print wifi status
   oledDisplay.firstPage();
   do {
@@ -442,7 +447,7 @@ void setup() {
       oledDisplay.print(ssid_AP);
     }
     oledDisplay.setCursor(28, 39);
-    oledDisplay.print(hostName);
+    oledDisplay.print(hostname);
     oledDisplay.setCursor(28, 64);
     if (wifiSTAmode) {
       oledDisplay.print(WiFi.localIP());
@@ -521,11 +526,6 @@ void setup() {
 
   ArduinoOTA.begin();
 
-#if ENABLE_MDNS
-  // Add service to MDNS-SD
-  MDNS.addService("http", "tcp", 8080);
-#endif
-
 #endif
 
 }
@@ -538,7 +538,7 @@ void loop() {
 #if ENABLE_MDNS
   MDNS.update();
 #endif
-
+  
   ArduinoOTA.handle();
   server.handleClient();
 #endif
@@ -967,14 +967,16 @@ void loop() {
             Serial.println("\n\n********************************************\nWiFi network information\n");
             Serial.println("# Startup log:");
             Serial.println(wifiMsg);
-            Serial.println("# end of log");
+            Serial.println("# end of log\n");
 
+            Serial.println("# Current WiFi status:");
+            WiFi.printDiag(Serial);
             if (wifiSTAmode == false) {
-              Serial.print("\nConnected clients: ");
+              Serial.print("Connected clients: ");
               Serial.println(WiFi.softAPgetStationNum());
             }
 
-            Serial.println("\nAvailable WiFi networks:");
+            Serial.println("\n# Available WiFi networks:");
             int wifiCnt = WiFi.scanNetworks();
             if (wifiCnt == 0) {
               Serial.println("no networks found");
@@ -1153,12 +1155,19 @@ void getParameter() {
 
 // send available WiFi networks to client
 void getWiFiNetworks() {
+  bool ssidSTAavailable = false;
   String response = "";
   int n = WiFi.scanNetworks();
+  
   if (n > 0) {
     for (int i = 0; i < n; ++i) {
       response += WiFi.SSID(i);
+      if(WiFi.SSID(i) == ssid_STA) ssidSTAavailable = true;
       if (i < n - 1) response += "&";
+    }
+    if(!ssidSTAavailable){
+      response += "&";
+      response += ssid_STA;
     }
   }
   server.send(200, "text/html", response);
@@ -1203,9 +1212,6 @@ void saveParameter() {
   EEPROM.put(P_PASSWORD_AP, password_AP);
   EEPROM.commit();
 
-  // save current model to json
-  saveModelJson(curModelName);
-
   server.send(200, "text/plain", "saved");
 }
 
@@ -1228,7 +1234,7 @@ void runTare() {
 }
 
 
-// save new model
+// save model
 void saveModel() {
   if (server.hasArg("modelname")) {
     if (saveModelJson(server.arg("modelname"))) {
@@ -1458,9 +1464,21 @@ bool deleteModelJson(String modelName) {
 }
 
 void writeModelData(JsonObject& object) {
-  object["wt"] = weightTotal;
-  object["cg"] = CG_length;
-  object["cglr"] = CG_trans;
+  char buff[8];
+  String stringBuff;
+  
+  dtostrf(weightTotal, 5, 1, buff);
+  stringBuff = buff;
+  stringBuff.trim();
+  object["wt"] = stringBuff;
+  dtostrf(CG_length, 5, 1, buff);
+  stringBuff = buff;
+  stringBuff.trim();
+  object["cg"] = stringBuff;
+  dtostrf(CG_trans, 5, 1, buff);
+  stringBuff = buff;
+  stringBuff.trim();
+  object["cglr"] = stringBuff;
   object["x1"] = distance[X1];
   object["x2"] = distance[X2];
   object["x3"] = distance[X3];
