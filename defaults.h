@@ -51,6 +51,27 @@ enum {
 };
 
 
+#if defined(ESP8266)
+// https update
+enum {
+  PROBE_UPDATE,
+  UPDATE_FIRMWARE,
+  UPDATE_SPIFFS
+};
+
+
+// console msg type
+enum {
+  T_BOOT,
+  T_RUN,
+  T_ERROR,
+  T_WIFI,
+  T_UPDATE,
+  T_HTTPS
+};
+#endif
+
+
 // EEprom parameter addresses
 enum {
   P_NUMBER_LOADCELLS =                  1,
@@ -74,7 +95,9 @@ enum {
   P_SSID_AP =                           P_PASSWORD_STA + MAX_SSID_PW_LENGHT + 1,
   P_PASSWORD_AP =                       P_SSID_AP + MAX_SSID_PW_LENGHT + 1,
   P_MODELNAME =                         P_PASSWORD_AP + MAX_SSID_PW_LENGHT + 1,
-  EEPROM_SIZE =                         P_MODELNAME + MAX_MODELNAME_LENGHT + 1
+  P_ENABLE_UPDATE =                     P_MODELNAME + MAX_MODELNAME_LENGHT + 1,
+  P_ENABLE_OTA =                        P_ENABLE_UPDATE + 1,
+  EEPROM_SIZE =                         P_ENABLE_OTA + 1
 #endif
 };
 

@@ -142,11 +142,22 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NON
 const char ip[4] =                  {1,2,3,4};    // default IP address
 
 #define ENABLE_MDNS                 true          // enable mDNS to reach the webpage with hostname.local
+#define ENABLE_OTA                  true          // enable over the air update
+
+
+
+// **** https update settings ****
+
+#define ENABLE_UPDATE               true
+#define HTTPS_PORT                  443
+#define HOST                        "github.com"
+#define URL                         "/nightflyer88/CG_scale/releases/latest"
 
 
 
 // **** Model memory settings ****
 
 #define MAX_MODELNAME_LENGHT        32               // max chars 
+#define DEFAULT_NAME                "Model"          // default model name
 #define MODEL_FILE                  "/models.json"   // file to store models
-#define JSONBUFFER_SIZE             20000            // max file size in bytes
+#define JSONDOC_SIZE                20000            // max file size in bytes
