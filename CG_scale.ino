@@ -4,11 +4,23 @@
                       (c) 2019 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "2.0"
+#define CGSCALE_VERSION "2.1"
 /*
 
   ******************************************************************
   history:
+  V2.1    18.07.20     added support for ESP8266 based Wifi Kit 8
+  (by Pulsar07/           (https://heltec.org/project/wifi-kit-8/)
+   R.Stransky             is a ESP8266 with 
+                          * a build in OLED 128x32
+                          * battery connector with charging management
+                          * reset and GPIO0 button 
+                        support for a tare button (PIN_TARE_BUTTON)
+                        bug fixed: wifi password now with up to 64 chars
+                        bug fixed: wifi data (ssid/passwd) with special 
+                          character (e.g. +) is now supported
+                        for specified battery type, voltage is displayed  
+                        using uncompressed html files makes WEB GUI much faster
   V2.0    26.01.20      Webpage rewritten, no bootstrap framework needed
                         add translation to webpage (en, de)
                         optimized for measuring with landinggears
@@ -155,6 +167,206 @@ void(* resetCPU) (void) = 0;
 void resetCPU() {}
 #endif
 
+void initOLED() {
+  oledDisplay.begin();
+
+  const uint8_t *font;
+  font = u8g2_font_6x12_tr;
+  int displayHeight = oledDisplay.getDisplayHeight();
+  int displayWidth = oledDisplay.getDisplayWidth();
+  if (displayHeight <= 32) {
+    font = u8g2_font_6x12_tr;
+  }
+  int ylineHeight = displayHeight/3;
+
+  oledDisplay.firstPage();
+  do {
+    if (displayHeight <= 32) {
+      oledDisplay.drawXBMP(5, 0, 18, 18, CGImage);
+    } else {
+      oledDisplay.drawXBMP(20, 12, 18, 18, CGImage);
+    }
+    oledDisplay.setFont(u8g2_font_helvR12_tr);
+    if (displayHeight <= 32) {
+      oledDisplay.setCursor(30, 12);
+    } else {
+      oledDisplay.setCursor(45, 28);
+    }
+    oledDisplay.print(F("CG scale"));
+
+    oledDisplay.setFont(u8g2_font_5x7_tr);
+    if (displayHeight <= 32) {
+      oledDisplay.setCursor(30, 22);
+    } else {
+      oledDisplay.setCursor(35, 55);
+    }
+    oledDisplay.print(F("Version: "));
+    oledDisplay.print(CGSCALE_VERSION);
+    if (displayHeight <= 32) {
+      oledDisplay.setCursor(5, 31);
+    } else {
+      oledDisplay.setCursor(20, 64);
+    }
+    oledDisplay.print(F("(c) 2019 M.Lehmann et al."));
+
+  } while ( oledDisplay.nextPage() );
+}
+
+void printOLED(String aLine1, String aLine2, String aLine3=String(""));
+
+void printOLED(String aLine1, String aLine2, String aLine3) {
+  const uint8_t *font;
+  font = u8g2_font_6x12_tr;
+  int displayHeight = oledDisplay.getDisplayHeight();
+  int displayWidth = oledDisplay.getDisplayWidth();
+  font = u8g2_font_helvR10_tr;
+  if (displayHeight <= 32) {
+    font = u8g2_font_6x12_tr;
+  }
+  int ylineHeight = displayHeight/3;
+
+  oledDisplay.firstPage();
+  do {
+    oledDisplay.setFont(u8g2_font_6x12_tr);
+    oledDisplay.setCursor(0, ylineHeight*1);
+    oledDisplay.print(aLine1);
+    oledDisplay.setCursor(0, ylineHeight*2);
+    oledDisplay.print(aLine2);
+    if (aLine3 == "") {
+      oledDisplay.drawLine(0, ylineHeight*2 + 2, displayWidth, ylineHeight*2+2);
+      oledDisplay.setFont(u8g2_font_4x6_tr);
+      oledDisplay.setCursor(0, displayHeight);
+      String signature = "CG scale: V" + String(CGSCALE_VERSION);
+      oledDisplay.setCursor(displayWidth - oledDisplay.getStrWidth(signature.c_str()), displayHeight);
+      oledDisplay.print(signature);
+    } else {
+      oledDisplay.setCursor(0, displayHeight);
+      oledDisplay.print(aLine3);
+    }
+  } while ( oledDisplay.nextPage() );
+}
+
+void printScaleOLED() {
+  // print to display
+  char buff[8];
+  int pos_weightTotal = 7;
+  int pos_CG_length = 28;
+  if (nLoadcells == 2) {
+    pos_weightTotal = 17;
+    pos_CG_length = 45;
+    if (batType == 0) {
+      pos_weightTotal = 12;
+      pos_CG_length = 40;
+    }
+  }
+
+  const uint8_t *font;
+  int linestart = 14;
+  int linedist = 25;
+  int col0=0;
+  int col1=28;
+  font = u8g2_font_helvR12_tr;
+  if (oledDisplay.getDisplayHeight() <=32) {
+    font = u8g2_font_6x12_tr;
+    linestart = 8;
+    linedist = 12;
+    col0=0;
+    col1=28;
+  }
+  oledDisplay.firstPage();
+  do {
+    if (errMsgCnt == 0) {
+      // print battery
+      if (batType > B_OFF) {
+        oledDisplay.drawXBMP(48, 1, 12, 6, batteryImage);
+        float percentVolt = percentBat(batVolt / batCells);
+        dtostrf(percentVolt, 3, 0, buff);
+        oledDisplay.drawBox(49, 2, (percentVolt / (100 / 8)), 4);
+
+        oledDisplay.setFont(u8g2_font_5x7_tr);
+        oledDisplay.setCursor(78 - oledDisplay.getStrWidth(buff), 7);
+        if (batType > B_VOLT) {
+          dtostrf(percentVolt, 3, 0, buff);
+          oledDisplay.print(buff);
+          oledDisplay.print(F("%/"));
+        }
+        dtostrf(batVolt, 2, 2, buff);
+        oledDisplay.print(buff);
+        oledDisplay.print(F("V"));
+      }
+
+      // print total weight
+      oledDisplay.setFont(font);
+      if (oledDisplay.getDisplayHeight() <= 32) {
+        oledDisplay.setCursor(1, 18);
+        oledDisplay.print(F("M  = "));
+      } else {
+        oledDisplay.drawXBMP(2, pos_weightTotal, 18, 18, weightImage);
+        oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), pos_weightTotal + 17);
+      }
+      dtostrf(weightTotal, 5, 1, buff);
+      oledDisplay.print(buff);
+      oledDisplay.print(F("g"));
+
+      // print CG longitudinal axis
+      if (oledDisplay.getDisplayHeight() <=32) {
+        oledDisplay.setCursor(1, 32);
+        oledDisplay.print(F("CG = "));
+      } else {
+        oledDisplay.drawXBMP(2, pos_CG_length, 18, 18, CGImage);
+        oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), pos_CG_length + 16);
+      }
+      dtostrf(CG_length, 5, 1, buff);
+      oledDisplay.print(buff);
+      oledDisplay.print(F("mm"));
+
+      // print CG transverse axis
+      if (nLoadcells == 3) {
+        if (oledDisplay.getDisplayHeight() <=32) {
+          oledDisplay.setCursor(78, 32);
+          oledDisplay.print(F("LR="));
+          dtostrf(CG_trans, 3, 0, buff);
+        } else {
+          oledDisplay.drawXBMP(2, 47, 18, 18, CGtransImage);
+          oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), 64);
+          dtostrf(CG_trans, 5, 1, buff);
+        }
+        oledDisplay.print(buff);
+        oledDisplay.print(F("mm"));
+      }
+    } else {
+      oledDisplay.setFont(u8g2_font_5x7_tr);
+      for (int i = 1; i <= errMsgCnt; i++) {
+        oledDisplay.setCursor(0, 7 * i);
+        oledDisplay.print(errMsg[i]);
+      }
+    }
+
+  } while ( oledDisplay.nextPage() );
+}
+
+#ifdef PIN_TARE_BUTTON
+void handleTareBtn() {
+  static unsigned long lastTaraBtn = 0;
+  if ((millis() - lastTaraBtn) > 20) {
+    lastTaraBtn = millis();
+    static int tareBtnCnt = 0;
+    if(digitalRead(PIN_TARE_BUTTON)) {
+      tareBtnCnt = 0;
+    } else {
+      tareBtnCnt++;
+      if (tareBtnCnt > 10) {
+        Serial.println("tare button pressed");
+	printOLED("TARE ==>","  tare load cells ...");
+        // avoid keybounce
+        tareBtnCnt = -1000;
+        tareLoadcells();
+        delay(2000);
+      }
+    }
+  }
+}
+#endif
 
 // save calibration factor
 void saveCalFactor(int nLC) {
@@ -278,8 +490,9 @@ int percentBat(float cellVoltage) {
 void setup() {
 
   // init serial
-  Serial.begin(9600);
+  Serial.begin(115200);
   Serial.println();
+  delay(1000);
 
 #if defined(ESP8266)
   printConsole(T_BOOT, "startup CG scale V" + String(CGSCALE_VERSION));
@@ -367,23 +580,9 @@ void setup() {
 
   // init OLED display
 #if defined(ESP8266)
-  printConsole(T_BOOT, "init OLED display");
+  printConsole(T_BOOT, "init OLED display: " + String(oledDisplay.getDisplayWidth())+ String("x") + String(oledDisplay.getDisplayHeight()));
 #endif
-  oledDisplay.begin();
-  oledDisplay.firstPage();
-  do {
-    oledDisplay.drawXBMP(20, 12, 18, 18, CGImage);
-    oledDisplay.setFont(u8g2_font_helvR12_tr);
-    oledDisplay.setCursor(45, 28);
-    oledDisplay.print(F("CG scale"));
-
-    oledDisplay.setFont(u8g2_font_5x7_tr);
-    oledDisplay.setCursor(35, 55);
-    oledDisplay.print(F("Version: "));
-    oledDisplay.print(CGSCALE_VERSION);
-    oledDisplay.setCursor(20, 64);
-    oledDisplay.print(F("(c) 2019 M. Lehmann"));
-  } while ( oledDisplay.nextPage() );
+  initOLED();
 
   // init & tare Loadcells
   for (int i = LC1; i <= LC3; i++) {
@@ -408,6 +607,7 @@ void setup() {
 #if defined(ESP8266)
 
   // Start by connecting to a WiFi network
+  WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid_STA, password_STA);
 
@@ -417,17 +617,19 @@ void setup() {
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
+    Serial.print(".");
     if (WiFi.status() == WL_NO_SSID_AVAIL) {
-      printConsole(T_ERROR, "Wifi: No SSID available");
+      printConsole(T_ERROR, "\nWifi: No SSID available");
       break;
     } else if (WiFi.status() == WL_CONNECT_FAILED) {
-      printConsole(T_ERROR, "Wifi: Connection failed");
+      printConsole(T_ERROR, "\nWifi: Connection failed");
       break;
     } else if ((millis() - timeoutWiFi) > TIMEOUT_CONNECT) {
-      printConsole(T_ERROR, "Wifi: Timeout");
+      printConsole(T_ERROR, "\nWifi: Timeout");
       break;
     }
   }
+
 
   if (WiFi.status() != WL_CONNECTED) {
     // if WiFi not connected, switch to access point mode
@@ -457,34 +659,16 @@ void setup() {
   }
 #endif
 
+  if (wifiSTAmode) {
+    printOLED("WiFi: " + String(ssid_STA),
+              "Host: " + String(hostname),
+              "IP  : " + WiFi.localIP().toString());
+  } else {
+    printOLED("WiFi: " + String(ssid_AP),
+              "Host: " + String(hostname),
+              "IP  : " + WiFi.softAPIP().toString());
+  }
 
-  // print wifi status
-  oledDisplay.firstPage();
-  do {
-    oledDisplay.setFont(u8g2_font_5x7_tr);
-    oledDisplay.setCursor(0, 14);
-    oledDisplay.print(F("WiFi:"));
-    oledDisplay.setCursor(0, 39);
-    oledDisplay.print(F("Host:"));
-    oledDisplay.setCursor(0, 64);
-    oledDisplay.print(F("IP:"));
-
-    oledDisplay.setFont(u8g2_font_helvR10_tr);
-    oledDisplay.setCursor(28, 14);
-    if (wifiSTAmode) {
-      oledDisplay.print(ssid_STA);
-    } else {
-      oledDisplay.print(ssid_AP);
-    }
-    oledDisplay.setCursor(28, 39);
-    oledDisplay.print(hostname);
-    oledDisplay.setCursor(28, 64);
-    if (wifiSTAmode) {
-      oledDisplay.print(WiFi.localIP());
-    } else {
-      oledDisplay.print(WiFi.softAPIP());
-    }
-  } while ( oledDisplay.nextPage() );
   delay(3000);
 
   // When the client requests data
@@ -589,6 +773,10 @@ void loop() {
   server.handleClient();
 #endif
 
+  #ifdef PIN_TARE_BUTTON
+  handleTareBtn();
+  #endif
+
   updateLoadcells();
 
   // update loadcell values
@@ -605,6 +793,7 @@ void loop() {
       }
     }
   }
+
 
   // update display and serial menu
   if ((millis() - lastTimeMenu) > UPDATE_INTERVAL_OLED_MENU) {
@@ -642,80 +831,10 @@ void loop() {
     // read battery voltage
     if (batType > B_OFF) {
       batVolt = (analogRead(VOLTAGE_PIN) / 1024.0) * V_REF * ((resistor[R1] + resistor[R2]) / resistor[R2]) / 1000.0;
-#if ENABLE_PERCENTLIST
-      if (batType > B_VOLT) {
-        batVolt = percentBat(batVolt / batCells);
-      }
-#endif
     }
 
-    // print to display
-    char buff[8];
-    int pos_weightTotal = 7;
-    int pos_CG_length = 28;
-    if (nLoadcells == 2) {
-      pos_weightTotal = 17;
-      pos_CG_length = 45;
-      if (batType == 0) {
-        pos_weightTotal = 12;
-        pos_CG_length = 40;
-      }
-    }
+    printScaleOLED();
 
-    oledDisplay.firstPage();
-    do {
-      if (errMsgCnt == 0) {
-        // print battery
-        if (batType > B_OFF) {
-          oledDisplay.drawXBMP(88, 1, 12, 6, batteryImage);
-          if (batType == B_VOLT) {
-            dtostrf(batVolt, 2, 2, buff);
-          } else {
-            dtostrf(batVolt, 3, 0, buff);
-            oledDisplay.drawBox(89, 2, (batVolt / (100 / 8)), 4);
-          }
-          oledDisplay.setFont(u8g2_font_5x7_tr);
-          oledDisplay.setCursor(123 - oledDisplay.getStrWidth(buff), 7);
-          oledDisplay.print(buff);
-          if (batType == B_VOLT) {
-            oledDisplay.print(F("V"));
-          } else {
-            oledDisplay.print(F("%"));
-          }
-        }
-
-        // print total weight
-        oledDisplay.drawXBMP(2, pos_weightTotal, 18, 18, weightImage);
-        dtostrf(weightTotal, 5, 1, buff);
-        oledDisplay.setFont(u8g2_font_helvR12_tr);
-        oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), pos_weightTotal + 17);
-        oledDisplay.print(buff);
-        oledDisplay.print(F(" g"));
-
-        // print CG longitudinal axis
-        oledDisplay.drawXBMP(2, pos_CG_length, 18, 18, CGImage);
-        dtostrf(CG_length, 5, 1, buff);
-        oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), pos_CG_length + 16);
-        oledDisplay.print(buff);
-        oledDisplay.print(F(" mm"));
-
-        // print CG transverse axis
-        if (nLoadcells == 3) {
-          oledDisplay.drawXBMP(2, 47, 18, 18, CGtransImage);
-          dtostrf(CG_trans, 5, 1, buff);
-          oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), 64);
-          oledDisplay.print(buff);
-          oledDisplay.print(F(" mm"));
-        }
-      } else {
-        oledDisplay.setFont(u8g2_font_5x7_tr);
-        for (int i = 1; i <= errMsgCnt; i++) {
-          oledDisplay.setCursor(0, 7 * i);
-          oledDisplay.print(errMsg[i]);
-        }
-      }
-
-    } while ( oledDisplay.nextPage() );
 
     // serial connection
     if (Serial) {
@@ -838,7 +957,7 @@ void loop() {
       switch (menuPage)
       {
         case MENU_HOME: {
-            Serial.print(F("\n\n********************************************\nCG scale by M.Lehmann - V"));
+            Serial.print(F("\n\n********************************************\nCG scale by M.Lehmann et al. - V"));
             Serial.print(CGSCALE_VERSION);
             Serial.print(F("\n\n"));
 
@@ -1111,10 +1230,16 @@ void getValue() {
     response += buff;
     response += "V";
   } else {
-    dtostrf(batVolt, 5, 0, buff);
+    float percentVolt = percentBat(batVolt / batCells);
+    dtostrf(percentVolt, 5, 0, buff);
     response += buff;
-    response += "%";
+    response += "%/";
+    dtostrf(batVolt, 5, 2, buff);
+    response += buff;
+    response += "V";
   }
+  Serial.print("send response: ");
+  Serial.println(response);
   server.send(200, "text/html", response);
 }
 
@@ -1137,9 +1262,13 @@ void getRawValue() {
     response += buff;
     response += "V";
   } else {
-    dtostrf(batVolt, 5, 0, buff);
+    float percentVolt = percentBat(batVolt / batCells);
+    dtostrf(percentVolt, 5, 0, buff);
     response += buff;
-    response += "%";
+    response += "%/";
+    dtostrf(batVolt, 5, 2, buff);
+    response += buff;
+    response += "V";
   }
   server.send(200, "text/html", response);
 }

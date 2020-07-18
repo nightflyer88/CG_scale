@@ -7,7 +7,7 @@ Schwerpunktwaage auf Arduinobasis zum auswiegen von Flugmodellen. Es werden rela
 Die wichtigsten Funktionen:
 
 - unterstützt Waagen mit 2 oder 3 Wiegezellen
-- unterstützt ESP8266 und Arduino mit ATmega328, ATmega32u4
+- unterstützt ESP8266 (auch Wifi Kit 8) und Arduino mit ATmega328, ATmega32u4
 - automatische Kalibrierung anhand eines Referenzobjekts, dadurch kein mühsames eruieren der Kalibrierwerte
 - Anzeige durch OLED Display
 - Batteriespannnung kann gemessen werden
