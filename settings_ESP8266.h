@@ -48,7 +48,7 @@ CG scale with 3 Loadcells:
 
 // Wifi Kit 8 (https://heltec.org/project/wifi-kit-8/) 
 // is a ESP8266 based board, with integrated OLED and battery management
-// #define WIFI_KIT_8 1
+#define WIFI_KIT_8 1
 #ifdef WIFI_KIT_8
   #define PIN_LOADCELL1_DOUT            D6
   #define PIN_LOADCELL1_PD_SCK          D7
@@ -62,6 +62,8 @@ CG scale with 3 Loadcells:
 
   // D3 can be used in parallel to the load cell with Wifi Kit 8
   #define PIN_TARE_BUTTON               D3
+
+  #define MAX_SSID_PW_LENGHT            64
 #else
   #define PIN_LOADCELL1_DOUT            D6
   #define PIN_LOADCELL1_PD_SCK          D5
@@ -151,7 +153,9 @@ CG scale with 3 Loadcells:
 
 // **** Wifi settings ****
 
-#define MAX_SSID_PW_LENGHT          64
+#ifndef MAX_SSID_PW_LENGHT
+#define MAX_SSID_PW_LENGHT          32
+#endif
 
 // Station mode: connect to available network
 #define SSID_STA                    "myWiFi"

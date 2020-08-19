@@ -4,29 +4,31 @@
                       (c) 2019 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "2.1"
+#define CGSCALE_VERSION "2.2"
 /*
 
   ******************************************************************
   history:
+  V2.2    18.08.20     code is now compatible with standard OLED displays
+                       and original code base (default pw length = 32)
   V2.1    18.07.20     added support for ESP8266 based Wifi Kit 8
   (by Pulsar07/           (https://heltec.org/project/wifi-kit-8/)
-   R.Stransky             is a ESP8266 with 
-                          * a build in OLED 128x32
-                          * battery connector with charging management
-                          * reset and GPIO0 button 
+   R.Stransky             is a ESP8266 with
+                            a build in OLED 128x32
+                            battery connector with charging management
+                            reset and GPIO0 button
                         support for a tare button (PIN_TARE_BUTTON)
                         bug fixed: wifi password now with up to 64 chars
-                        bug fixed: wifi data (ssid/passwd) with special 
+                        bug fixed: wifi data (ssid/passwd) with special
                           character (e.g. +) is now supported
-                        for specified battery type, voltage is displayed  
+                        for specified battery type, voltage is displayed
                         using uncompressed html files makes WEB GUI much faster
   V2.0    26.01.20      Webpage rewritten, no bootstrap framework needed
                         add translation to webpage (en, de)
                         optimized for measuring with landinggears
                         updated to ArduinoJson V6
                         firmware update over web interface
-  V1.2.1  31.03.19      small bug fixed 
+  V1.2.1  31.03.19      small bug fixed
                         values in model database are rounded
                         mDNS and OTA did not work in AP mode
   V1.2    23.02.19      Add OTA (over the air update)
@@ -98,7 +100,7 @@
 #endif
 
 // HX711 constructor array (dout pin, sck pint):
-HX711_ADC LoadCell[]{HX711_ADC(PIN_LOADCELL1_DOUT, PIN_LOADCELL1_PD_SCK),HX711_ADC(PIN_LOADCELL2_DOUT, PIN_LOADCELL2_PD_SCK),HX711_ADC(PIN_LOADCELL3_DOUT, PIN_LOADCELL3_PD_SCK)};
+HX711_ADC LoadCell[] {HX711_ADC(PIN_LOADCELL1_DOUT, PIN_LOADCELL1_PD_SCK), HX711_ADC(PIN_LOADCELL2_DOUT, PIN_LOADCELL2_PD_SCK), HX711_ADC(PIN_LOADCELL3_DOUT, PIN_LOADCELL3_PD_SCK)};
 
 // webserver constructor
 #if defined(ESP8266)
@@ -153,6 +155,12 @@ bool updateMenu = true;
 int menuPage = 0;
 String errMsg[5];
 int errMsgCnt = 0;
+int oledDisplayHeight;
+int oledDisplayWidth;
+const uint8_t *oledFontLarge;
+const uint8_t *oledFontNormal;
+const uint8_t *oledFontSmall;
+const uint8_t *oledFontTiny;
 #if defined(ESP8266)
 String updateMsg = "";
 bool wifiSTAmode = true;
@@ -169,40 +177,50 @@ void resetCPU() {}
 
 void initOLED() {
   oledDisplay.begin();
+  oledDisplayHeight = oledDisplay.getDisplayHeight();
+  oledDisplayWidth = oledDisplay.getDisplayWidth();
+  printConsole(T_BOOT, "init OLED display: " + String(oledDisplayWidth) + String("x") + String(oledDisplayHeight));
 
-  const uint8_t *font;
-  font = u8g2_font_6x12_tr;
-  int displayHeight = oledDisplay.getDisplayHeight();
-  int displayWidth = oledDisplay.getDisplayWidth();
-  if (displayHeight <= 32) {
-    font = u8g2_font_6x12_tr;
+
+  oledFontLarge  = u8g2_font_helvR12_tr;
+  oledFontNormal = u8g2_font_helvR10_tr;
+  oledFontSmall  = u8g2_font_5x7_tr;
+  oledFontTiny   = u8g2_font_4x6_tr;
+
+  if (oledDisplayHeight <= 32) {
+    oledFontLarge  = u8g2_font_helvR10_tr;
+    oledFontNormal = u8g2_font_6x12_tr;
   }
-  int ylineHeight = displayHeight/3;
+  int ylineHeight = oledDisplayHeight / 3;
+
+  oledDisplay.setFont(oledFontNormal);
 
   oledDisplay.firstPage();
   do {
-    if (displayHeight <= 32) {
+    oledDisplay.setFont(oledFontLarge);
+    if (oledDisplayHeight <= 32) {
       oledDisplay.drawXBMP(5, 0, 18, 18, CGImage);
     } else {
       oledDisplay.drawXBMP(20, 12, 18, 18, CGImage);
     }
-    oledDisplay.setFont(u8g2_font_helvR12_tr);
-    if (displayHeight <= 32) {
+    oledDisplay.setFont(oledFontLarge);
+
+    if (oledDisplayHeight <= 32) {
       oledDisplay.setCursor(30, 12);
     } else {
       oledDisplay.setCursor(45, 28);
     }
     oledDisplay.print(F("CG scale"));
 
-    oledDisplay.setFont(u8g2_font_5x7_tr);
-    if (displayHeight <= 32) {
+    oledDisplay.setFont(oledFontSmall);
+    if (oledDisplayHeight <= 32) {
       oledDisplay.setCursor(30, 22);
     } else {
       oledDisplay.setCursor(35, 55);
     }
     oledDisplay.print(F("Version: "));
     oledDisplay.print(CGSCALE_VERSION);
-    if (displayHeight <= 32) {
+    if (oledDisplayHeight <= 32) {
       oledDisplay.setCursor(5, 31);
     } else {
       oledDisplay.setCursor(20, 64);
@@ -212,35 +230,28 @@ void initOLED() {
   } while ( oledDisplay.nextPage() );
 }
 
-void printOLED(String aLine1, String aLine2, String aLine3=String(""));
+void printOLED(String aLine1, String aLine2, String aLine3 = String(""));
 
 void printOLED(String aLine1, String aLine2, String aLine3) {
-  const uint8_t *font;
-  font = u8g2_font_6x12_tr;
-  int displayHeight = oledDisplay.getDisplayHeight();
-  int displayWidth = oledDisplay.getDisplayWidth();
-  font = u8g2_font_helvR10_tr;
-  if (displayHeight <= 32) {
-    font = u8g2_font_6x12_tr;
-  }
-  int ylineHeight = displayHeight/3;
+  int ylineHeight = oledDisplayHeight / 3;
 
   oledDisplay.firstPage();
   do {
-    oledDisplay.setFont(u8g2_font_6x12_tr);
-    oledDisplay.setCursor(0, ylineHeight*1);
+    oledDisplay.setFont(oledFontNormal);
+    oledDisplay.setCursor(0, ylineHeight * 1);
     oledDisplay.print(aLine1);
-    oledDisplay.setCursor(0, ylineHeight*2);
+    oledDisplay.setCursor(0, ylineHeight * 2);
     oledDisplay.print(aLine2);
     if (aLine3 == "") {
-      oledDisplay.drawLine(0, ylineHeight*2 + 2, displayWidth, ylineHeight*2+2);
-      oledDisplay.setFont(u8g2_font_4x6_tr);
-      oledDisplay.setCursor(0, displayHeight);
+      oledDisplay.drawLine(0, ylineHeight * 2 + 2, oledDisplayWidth, ylineHeight * 2 + 2);
+      oledDisplay.setFont(oledFontTiny);
+      oledDisplay.setCursor(0, oledDisplayHeight);
+      oledDisplay.print("IP:" + WiFi.localIP().toString());
       String signature = "CG scale: V" + String(CGSCALE_VERSION);
-      oledDisplay.setCursor(displayWidth - oledDisplay.getStrWidth(signature.c_str()), displayHeight);
+      oledDisplay.setCursor(oledDisplayWidth - oledDisplay.getStrWidth(signature.c_str()), oledDisplayHeight);
       oledDisplay.print(signature);
     } else {
-      oledDisplay.setCursor(0, displayHeight);
+      oledDisplay.setCursor(0, oledDisplayHeight);
       oledDisplay.print(aLine3);
     }
   } while ( oledDisplay.nextPage() );
@@ -248,7 +259,9 @@ void printOLED(String aLine1, String aLine2, String aLine3) {
 
 void printScaleOLED() {
   // print to display
-  char buff[8];
+  char buff1[8];
+  char buff[12];
+  char buff2[8];
   int pos_weightTotal = 7;
   int pos_CG_length = 28;
   if (nLoadcells == 2) {
@@ -260,19 +273,6 @@ void printScaleOLED() {
     }
   }
 
-  const uint8_t *font;
-  int linestart = 14;
-  int linedist = 25;
-  int col0=0;
-  int col1=28;
-  font = u8g2_font_helvR12_tr;
-  if (oledDisplay.getDisplayHeight() <=32) {
-    font = u8g2_font_6x12_tr;
-    linestart = 8;
-    linedist = 12;
-    col0=0;
-    col1=28;
-  }
   oledDisplay.firstPage();
   do {
     if (errMsgCnt == 0) {
@@ -283,7 +283,7 @@ void printScaleOLED() {
         dtostrf(percentVolt, 3, 0, buff);
         oledDisplay.drawBox(49, 2, (percentVolt / (100 / 8)), 4);
 
-        oledDisplay.setFont(u8g2_font_5x7_tr);
+        oledDisplay.setFont(oledFontSmall);
         oledDisplay.setCursor(78 - oledDisplay.getStrWidth(buff), 7);
         if (batType > B_VOLT) {
           dtostrf(percentVolt, 3, 0, buff);
@@ -294,48 +294,48 @@ void printScaleOLED() {
         oledDisplay.print(buff);
         oledDisplay.print(F("V"));
       }
-
+ 
       // print total weight
-      oledDisplay.setFont(font);
-      if (oledDisplay.getDisplayHeight() <= 32) {
+      oledDisplay.setFont(oledFontNormal);
+      dtostrf(weightTotal, 7, 1, buff);
+      if (oledDisplayHeight <= 32) {
         oledDisplay.setCursor(1, 18);
         oledDisplay.print(F("M  = "));
       } else {
         oledDisplay.drawXBMP(2, pos_weightTotal, 18, 18, weightImage);
         oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), pos_weightTotal + 17);
       }
-      dtostrf(weightTotal, 5, 1, buff);
       oledDisplay.print(buff);
-      oledDisplay.print(F("g"));
+      oledDisplay.print(F(" g"));
 
       // print CG longitudinal axis
-      if (oledDisplay.getDisplayHeight() <=32) {
+      dtostrf(CG_length, 7, 1, buff);
+      if (oledDisplayHeight <= 32) {
         oledDisplay.setCursor(1, 32);
         oledDisplay.print(F("CG = "));
       } else {
         oledDisplay.drawXBMP(2, pos_CG_length, 18, 18, CGImage);
         oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), pos_CG_length + 16);
       }
-      dtostrf(CG_length, 5, 1, buff);
       oledDisplay.print(buff);
-      oledDisplay.print(F("mm"));
+      oledDisplay.print(F(" mm"));
 
       // print CG transverse axis
       if (nLoadcells == 3) {
-        if (oledDisplay.getDisplayHeight() <=32) {
+        if (oledDisplayHeight <= 32) {
           oledDisplay.setCursor(78, 32);
           oledDisplay.print(F("LR="));
           dtostrf(CG_trans, 3, 0, buff);
         } else {
           oledDisplay.drawXBMP(2, 47, 18, 18, CGtransImage);
           oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), 64);
-          dtostrf(CG_trans, 5, 1, buff);
+          dtostrf(CG_trans, 7, 1, buff);
         }
         oledDisplay.print(buff);
-        oledDisplay.print(F("mm"));
+        oledDisplay.print(F(" mm"));
       }
     } else {
-      oledDisplay.setFont(u8g2_font_5x7_tr);
+      oledDisplay.setFont(oledFontSmall);
       for (int i = 1; i <= errMsgCnt; i++) {
         oledDisplay.setCursor(0, 7 * i);
         oledDisplay.print(errMsg[i]);
@@ -345,19 +345,21 @@ void printScaleOLED() {
   } while ( oledDisplay.nextPage() );
 }
 
+
+
 #ifdef PIN_TARE_BUTTON
 void handleTareBtn() {
   static unsigned long lastTaraBtn = 0;
   if ((millis() - lastTaraBtn) > 20) {
     lastTaraBtn = millis();
     static int tareBtnCnt = 0;
-    if(digitalRead(PIN_TARE_BUTTON)) {
+    if (digitalRead(PIN_TARE_BUTTON)) {
       tareBtnCnt = 0;
     } else {
       tareBtnCnt++;
       if (tareBtnCnt > 10) {
         Serial.println("tare button pressed");
-	printOLED("TARE ==>","  tare load cells ...");
+        printOLED("TARE ==>", "  tare load cells ...");
         // avoid keybounce
         tareBtnCnt = -1000;
         tareLoadcells();
@@ -378,7 +380,7 @@ void saveCalFactor(int nLC) {
 }
 
 
-void updateLoadcells(){
+void updateLoadcells() {
   for (int i = LC1; i <= LC3; i++) {
     if (i < nLoadcells) {
       LoadCell[i].update();
@@ -387,7 +389,7 @@ void updateLoadcells(){
 }
 
 
-void tareLoadcells(){
+void tareLoadcells() {
   for (int i = LC1; i <= LC3; i++) {
     if (i < nLoadcells) {
       LoadCell[i].tare();
@@ -396,7 +398,7 @@ void tareLoadcells(){
 }
 
 
-void printNewValueText(){
+void printNewValueText() {
   Serial.print(F("Set new value:"));
 }
 
@@ -421,7 +423,7 @@ bool runAutoCalibrate() {
     calFactorLoadcell[i] = calFactorLoadcell[i] / (toWeightLoadCell[i] / weightLoadCell[i]);
     saveCalFactor(i);
   }
-  
+
   // finish
   Serial.println(F("done"));
 }
@@ -461,7 +463,7 @@ int percentBat(float cellVoltage) {
       break;
     }
   }
-  
+
   float cellempty = pgm_read_float( &percentList[batTypeArray][0][0]);
   float cellfull = pgm_read_float( &percentList[batTypeArray][elementCount][0]);
 
@@ -473,9 +475,9 @@ int percentBat(float cellVoltage) {
     for (int i = 0; i <= elementCount; i++) {
       float curVolt = pgm_read_float(&percentList[batTypeArray][i][0]);
       if (curVolt >= cellVoltage && i > 0) {
-        float lastVolt = pgm_read_float(&percentList[batTypeArray][i-1][0]);
+        float lastVolt = pgm_read_float(&percentList[batTypeArray][i - 1][0]);
         float curPercent = pgm_read_float(&percentList[batTypeArray][i][1]);
-        float lastPercent = pgm_read_float(&percentList[batTypeArray][i-1][1]);
+        float lastPercent = pgm_read_float(&percentList[batTypeArray][i - 1][1]);
         result = float((cellVoltage - lastVolt) / (curVolt - lastVolt)) * (curPercent - lastPercent) + lastPercent;
         break;
       }
@@ -496,7 +498,7 @@ void setup() {
 
 #if defined(ESP8266)
   printConsole(T_BOOT, "startup CG scale V" + String(CGSCALE_VERSION));
-  
+
   // init filesystem
   SPIFFS.begin();
   EEPROM.begin(EEPROM_SIZE);
@@ -579,9 +581,6 @@ void setup() {
 #endif
 
   // init OLED display
-#if defined(ESP8266)
-  printConsole(T_BOOT, "init OLED display: " + String(oledDisplay.getDisplayWidth())+ String("x") + String(oledDisplay.getDisplayHeight()));
-#endif
   initOLED();
 
   // init & tare Loadcells
@@ -590,7 +589,7 @@ void setup() {
       LoadCell[i].begin();
       LoadCell[i].setCalFactor(calFactorLoadcell[i]);
 #if defined(ESP8266)
-      printConsole(T_BOOT, "init Loadcell " + String(i+1));
+      printConsole(T_BOOT, "init Loadcell " + String(i + 1));
 #endif
     }
   }
@@ -606,12 +605,13 @@ void setup() {
 
 #if defined(ESP8266)
 
+  printConsole(T_BOOT, "Wifi: STA mode - connecing with: " + String(ssid_STA));
+
   // Start by connecting to a WiFi network
   WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid_STA, password_STA);
 
-  printConsole(T_BOOT, "Wifi: STA mode - connect with: " + String(ssid_STA));
 
   long timeoutWiFi = millis();
 
@@ -643,7 +643,7 @@ void setup() {
     printConsole(T_RUN, "Wifi: Connected, IP: " + String(WiFi.localIP().toString()));
   }
 
-  
+
   // Set Hostname
   String hostname = "disabled";
 #if ENABLE_MDNS
@@ -653,7 +653,7 @@ void setup() {
   if (!MDNS.begin(hostname, WiFi.localIP())) {
     hostname = "mDNS failed";
     printConsole(T_ERROR, "Wifi: " + hostname);
-  }else{
+  } else {
     hostname += ".local";
     printConsole(T_RUN, "Wifi: " + hostname);
   }
@@ -703,10 +703,10 @@ void setup() {
   printConsole(T_RUN, "Webserver is up and running");
 
   // init OTA (over the air update)
-  if(enableOTA){    
+  if (enableOTA) {
     ArduinoOTA.setHostname(ssid_AP);
     ArduinoOTA.setPassword(password_AP);
-  
+
     ArduinoOTA.onStart([]() {
       String type;
       if (ArduinoOTA.getCommand() == U_FLASH) {
@@ -718,16 +718,16 @@ void setup() {
       updateMsg = "Updating " + type;
       printConsole(T_UPDATE, type);
     });
-  
+
     ArduinoOTA.onEnd([]() {
       updateMsg = "successful..";
       printUpdateProgress(100, 100);
     });
-  
+
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
       printUpdateProgress(progress, total);
     });
-  
+
     ArduinoOTA.onError([](ota_error_t error) {
       if (error == OTA_AUTH_ERROR) {
         updateMsg = "Auth Failed";
@@ -746,14 +746,14 @@ void setup() {
     ArduinoOTA.begin();
     printConsole(T_RUN, "OTA is up and running");
   }
-  
-  // https update 
+
+  // https update
   httpsClient.setInsecure();
-  if(enableUpdate){
+  if (enableUpdate) {
     // check for update
     httpsUpdate(PROBE_UPDATE);
   }
-  
+
 #endif
 
 }
@@ -767,15 +767,15 @@ void loop() {
   MDNS.update();
 #endif
 
-  if(enableOTA){
+  if (enableOTA) {
     ArduinoOTA.handle();
   }
   server.handleClient();
 #endif
 
-  #ifdef PIN_TARE_BUTTON
+#ifdef PIN_TARE_BUTTON
   handleTareBtn();
-  #endif
+#endif
 
   updateLoadcells();
 
@@ -811,9 +811,9 @@ void loop() {
       CG_length = ((weightLoadCell[LC2] * model.distance[X2]) / weightTotal) + model.distance[X1];
 
 #if defined(ESP8266)
-      if(model.mechanicsType == 2){
+      if (model.mechanicsType == 2) {
         CG_length = ((weightLoadCell[LC2] * model.distance[X2]) / weightTotal) - model.distance[X1];
-      }else if(model.mechanicsType == 3){
+      } else if (model.mechanicsType == 3) {
         CG_length = ((weightLoadCell[LC2] * model.distance[X2]) / weightTotal) * -1 + model.distance[X1];
       }
 #endif
@@ -834,7 +834,6 @@ void loop() {
     }
 
     printScaleOLED();
-
 
     // serial connection
     if (Serial) {
@@ -969,7 +968,7 @@ void loop() {
             for (int i = X1; i <= X3; i++) {
               Serial.print(MENU_DISTANCE_X1 + i);
               Serial.print(F("  - Set distance X"));
-              Serial.print(i+1);
+              Serial.print(i + 1);
               Serial.print(F(" ("));
               Serial.print(model.distance[i]);
               Serial.print(F("mm)\n"));
@@ -990,9 +989,9 @@ void loop() {
 
             for (int i = LC1; i <= LC3; i++) {
               Serial.print(MENU_LOADCELL1_CALIBRATION_FACTOR + i);
-              if((MENU_LOADCELL1_CALIBRATION_FACTOR + i) < 10) Serial.print(F(" "));
+              if ((MENU_LOADCELL1_CALIBRATION_FACTOR + i) < 10) Serial.print(F(" "));
               Serial.print(F(" - Set calibration factor of load cell "));
-              Serial.print(i+1);
+              Serial.print(i + 1);
               Serial.print(F(" ("));
               Serial.print(calFactorLoadcell[i]);
               Serial.print(F(")\n"));
@@ -1001,7 +1000,7 @@ void loop() {
             for (int i = R1; i <= R2; i++) {
               Serial.print(MENU_RESISTOR_R1 + i);
               Serial.print(F(" - Set value of resistor R"));
-              Serial.print(i+1);
+              Serial.print(i + 1);
               Serial.print(F(" ("));
               Serial.print(resistor[i]);
               Serial.print(F("ohm)\n"));
@@ -1362,14 +1361,14 @@ void getWiFiNetworks() {
   bool ssidSTAavailable = false;
   String response = "";
   int n = WiFi.scanNetworks();
-  
+
   if (n > 0) {
     for (int i = 0; i < n; ++i) {
       response += WiFi.SSID(i);
-      if(WiFi.SSID(i) == ssid_STA) ssidSTAavailable = true;
+      if (WiFi.SSID(i) == ssid_STA) ssidSTAavailable = true;
       if (i < n - 1) response += "&";
     }
-    if(!ssidSTAavailable){
+    if (!ssidSTAavailable) {
       response += "&";
       response += ssid_STA;
     }
@@ -1421,7 +1420,7 @@ void saveParameter() {
   EEPROM.put(P_ENABLE_OTA, enableOTA);
   EEPROM.commit();
 
-  if(model.name != ""){
+  if (model.name != "") {
     saveModelJson(model.name);
   }
 
@@ -1682,7 +1681,7 @@ bool deleteModelJson(String modelName) {
 void writeModelData(JsonObject object) {
   char buff[8];
   String stringBuff;
-  
+
   dtostrf(weightTotal, 5, 1, buff);
   stringBuff = buff;
   stringBuff.trim();
@@ -1707,14 +1706,13 @@ void writeModelData(JsonObject object) {
 // print update progress screen
 void printUpdateProgress(unsigned int progress, unsigned int total) {
   printConsole(T_UPDATE, updateMsg);
-  
+
   oledDisplay.firstPage();
   do {
-    oledDisplay.setFont(u8g2_font_helvR08_tr);
+    oledDisplay.setFont(oledFontSmall);
     oledDisplay.setCursor(0, 12);
     oledDisplay.print(updateMsg);
 
-    oledDisplay.setFont(u8g2_font_5x7_tr);
     oledDisplay.setCursor(107, 35);
     oledDisplay.printf("%u%%\r", (progress / (total / 100)));
 
@@ -1739,10 +1737,10 @@ char * TimeToString(unsigned long t)
   return str;
 }
 
-void printConsole(int t, String msg){
+void printConsole(int t, String msg) {
   Serial.print(TimeToString(millis()));
   Serial.print(" [");
-  switch(t) {
+  switch (t) {
     case T_BOOT:
       Serial.print("BOOT");
       break;
@@ -1768,7 +1766,7 @@ void printConsole(int t, String msg){
 
 
 // https update
-bool httpsUpdate(uint8_t command){  
+bool httpsUpdate(uint8_t command) {
   if (!httpsClient.connect(HOST, HTTPS_PORT)) {
     printConsole(T_ERROR, "Wifi: connection to GIT failed");
     return false;
@@ -1776,44 +1774,44 @@ bool httpsUpdate(uint8_t command){
 
   const char * headerKeys[] = {"Location"} ;
   const size_t numberOfHeaders = 1;
-  
+
   HTTPClient https;
   https.setUserAgent("cgscale");
   https.setRedirectLimit(0);
   https.setFollowRedirects(true);
 
   String url = "https://" + String(HOST) + String(URL);
-  if (https.begin(httpsClient, url)) { 
+  if (https.begin(httpsClient, url)) {
     https.collectHeaders(headerKeys, numberOfHeaders);
 
     printConsole(T_HTTPS, "GET: " + url);
     int httpCode = https.GET();
-    if (httpCode > 0) {         
+    if (httpCode > 0) {
       // response
-      if (httpCode == HTTP_CODE_FOUND) {      
+      if (httpCode == HTTP_CODE_FOUND) {
         String newUrl = https.header("Location");
-        gitVersion = newUrl.substring(newUrl.lastIndexOf('/')+2).toFloat();
-        if(gitVersion > String(CGSCALE_VERSION).toFloat()){
+        gitVersion = newUrl.substring(newUrl.lastIndexOf('/') + 2).toFloat();
+        if (gitVersion > String(CGSCALE_VERSION).toFloat()) {
           printConsole(T_UPDATE, "Firmware update available: V" + String(gitVersion));
-        }else{
+        } else {
           printConsole(T_UPDATE, "Firmware version found on GitHub: V" + String(gitVersion) + " - current firmware is up to date");
         }
-      }else if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+      } else if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
         Serial.println(https.getString());
-      }else{
+      } else {
         printConsole(T_ERROR, "HTTPS: GET... failed, " + https.errorToString(httpCode));
         https.end();
         return false;
       }
-    }else {
+    } else {
       return false;
     }
-    https.end();    
-  }else {
+    https.end();
+  } else {
     printConsole(T_ERROR, "Wifi: Unable to connect");
     return false;
   }
-  
+
   return true;
 }
 
