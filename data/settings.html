@@ -163,7 +163,7 @@
           transition: top 0.25s;
         }
         .tab-content {
-          height: 2260px;
+          height: 2300px;
           width: 100%;
           position: absolute;
           z-index: 1;
@@ -214,6 +214,17 @@
 
         .calButton:hover {
             background-color: #1E90FF;
+            color: white;
+        }
+        
+        .tareButton {
+            background-color: white; 
+            color: black; 
+            border: 2px solid #778899;
+        }
+
+        .tareButton:hover {
+            background-color: #778899;
             color: white;
         }
 
@@ -439,6 +450,7 @@
         var languages = {
           "en":{   
             "settingsLabel":"Settings",
+            "tareBtn":"Tare",
             "saveBtn":"Save",
             "tabGeneral":"General",
             "wifiHeading":"WiFi",
@@ -495,6 +507,7 @@
       },
           "de":{
             "settingsLabel":"Einstellungen",
+            "tareBtn":"Tare",
             "saveBtn":"Speichern",
             "tabGeneral":"Allgemein",
             "wifiHeading":"WiFi",
@@ -749,6 +762,22 @@
             element.value = value;
         }
         
+        function tare(){
+            document.getElementById("lc1").innerHTML = "TARE";
+            document.getElementById("lc2").innerHTML = "TARE";
+            if(CG_trans_visible == true){
+                document.getElementById("lc3").innerHTML = "TARE";
+            }
+            var request = new XMLHttpRequest();
+            request.onreadystatechange = function(){
+                if(this.readyState == 4 && this.status == 404){
+                    alert("Tare failed !");
+                }
+            }
+            request.open("GET", "tare", true);
+            request.send();
+        }
+        
         function drawBattery(value){
             document.getElementById("batValue").innerHTML = value;
             
@@ -997,6 +1026,9 @@
                 <small id="lc2Label"></small><small id="lc2">-</small>
                 <small id="lc3Label"></small><small id="lc3">-</small>
             </div>
+            <div style="margin-top:10px;">
+                <button type="button" class="button tareButton" onclick="tare()" id="tareBtn"></button> 
+            </div>
             <div style="margin-top:50px;">
                 <big id="cal1Label"></big>
                 <input type="text" id="calFactorLoadcell1">
@@ -1050,7 +1082,7 @@
       </div>
     </div>    
     
-    <div style="color:#808080; text-align:center; font-size:12px;">(c) 2019 M. Lehmann - Version: <span id="cgscaleVersion">--</span></div>
+    <div style="color:#808080; text-align:center; font-size:12px;">(c) 2020 M. Lehmann - Version: <span id="cgscaleVersion">--</span></div>
     <script>
         setTranslation("en");
         getHead();
