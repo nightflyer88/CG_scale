@@ -9,6 +9,7 @@
 
   ******************************************************************
   history:
+  V2.01   29.01.20      small bug fixes with AVR
   V2.0    26.01.20      Webpage rewritten, no bootstrap framework needed
                         add translation to webpage (en, de)
                         optimized for measuring with landinggears
@@ -100,9 +101,9 @@ File fsUploadFile;              // a File object to temporarily store the receiv
 #include "defaults.h"
 
 struct Model {
-  char name[MAX_MODELNAME_LENGHT + 1] = "";
   float distance[3] = {DISTANCE_X1, DISTANCE_X2, DISTANCE_X3};
 #if defined(ESP8266)
+  char name[MAX_MODELNAME_LENGHT + 1] = "";
   float targetCGmin = 0;
   float targetCGmax = 0;
   uint8_t mechanicsType = 0;
