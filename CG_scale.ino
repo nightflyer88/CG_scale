@@ -71,6 +71,12 @@
 
 */
 
+// **** Please UNCOMMENT to choose special hardware *****************
+
+//#define WIFI_KIT_8    //is a ESP8266 based board, with integrated OLED and battery management
+
+// ******************************************************************
+
 // Required libraries, can be installed from the library manager
 #include <HX711_ADC.h>      // library for the HX711 24-bit ADC for weight scales (https://github.com/olkal/HX711_ADC)
 #include <U8g2lib.h>        // Universal 8bit Graphics Library (https://github.com/olikraus/u8g2/)
@@ -97,7 +103,11 @@
 #if defined(__AVR__)
 #include "settings_AVR.h"
 #elif defined(ESP8266)
-#include "settings_ESP8266.h"
+  #ifdef WIFI_KIT_8
+    #include "settings_WIFI_KIT_8.h"
+  #else
+    #include "settings_ESP8266.h"
+  #endif
 #endif
 
 // HX711 constructor array (dout pin, sck pint):
@@ -359,7 +369,6 @@ void handleTareBtn() {
     } else {
       tareBtnCnt++;
       if (tareBtnCnt > 10) {
-        Serial.println("tare button pressed");
         printOLED("TARE ==>", "  tare load cells ...");
         // avoid keybounce
         tareBtnCnt = -1000;

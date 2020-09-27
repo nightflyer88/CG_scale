@@ -45,35 +45,15 @@ CG scale with 3 Loadcells:
 */
 
 
+#define PIN_LOADCELL1_DOUT            D6
+#define PIN_LOADCELL1_PD_SCK          D5
 
-// Wifi Kit 8 (https://heltec.org/project/wifi-kit-8/) 
-// is a ESP8266 based board, with integrated OLED and battery management
-#define WIFI_KIT_8 1
-#ifdef WIFI_KIT_8
-  #define PIN_LOADCELL1_DOUT            D6
-  #define PIN_LOADCELL1_PD_SCK          D7
-  
-  #define PIN_LOADCELL2_DOUT            D3
-  
-  #define PIN_LOADCELL2_PD_SCK          D8
-    
-  #define PIN_LOADCELL3_DOUT            D0
-  #define PIN_LOADCELL3_PD_SCK          D0
+#define PIN_LOADCELL2_DOUT            D2
+#define PIN_LOADCELL2_PD_SCK          D1
 
-  // D3 can be used in parallel to the load cell with Wifi Kit 8
-  #define PIN_TARE_BUTTON               D3
+#define PIN_LOADCELL3_DOUT            D7
+#define PIN_LOADCELL3_PD_SCK          D0
 
-  #define MAX_SSID_PW_LENGHT            64
-#else
-  #define PIN_LOADCELL1_DOUT            D6
-  #define PIN_LOADCELL1_PD_SCK          D5
-  
-  #define PIN_LOADCELL2_DOUT            D2
-  #define PIN_LOADCELL2_PD_SCK          D1
-  
-  #define PIN_LOADCELL3_DOUT            D7
-  #define PIN_LOADCELL3_PD_SCK          D0
-#endif
 
 
 // **** Measurement settings ****
@@ -101,13 +81,8 @@ CG scale with 3 Loadcells:
 
 // Please UNCOMMENT the display used
 
-#ifdef WIFI_KIT_8
-  // Wifi Kit 8 has a fixed wired 128x32 display
-  U8G2_SSD1306_128X32_UNIVISION_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ 16, /* clock=*/ 5, /* data=*/ 4);
-#else
-  U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ D3, /* data=*/ D4);
-  //U8G2_SSD1306_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ D3, /* data=*/ D4);
-#endif
+U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ D3, /* data=*/ D4);
+//U8G2_SSD1306_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ D3, /* data=*/ D4);
 
 
 // **** Voltage measurement settings ****
@@ -153,9 +128,7 @@ CG scale with 3 Loadcells:
 
 // **** Wifi settings ****
 
-#ifndef MAX_SSID_PW_LENGHT
 #define MAX_SSID_PW_LENGHT          32
-#endif
 
 // Station mode: connect to available network
 #define SSID_STA                    "myWiFi"
@@ -187,3 +160,8 @@ const char ip[4] =                  {1,2,3,4};    // default IP address
 #define DEFAULT_NAME                "Model"          // default model name
 #define MODEL_FILE                  "/models.json"   // file to store models
 #define JSONDOC_SIZE                20000            // max file size in bytes
+
+
+
+// **** end of settings ****
+#warning ESP8266 settings have been loaded
