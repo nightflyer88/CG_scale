@@ -51,15 +51,6 @@ enum {
 };
 
 
-#if defined(ESP8266)
-// https update
-enum {
-  PROBE_UPDATE,
-  UPDATE_FIRMWARE,
-  UPDATE_SPIFFS
-};
-
-
 // console msg type
 enum {
   T_BOOT,
@@ -68,6 +59,15 @@ enum {
   T_WIFI,
   T_UPDATE,
   T_HTTPS
+};
+
+
+#if defined(ESP8266)
+// https update
+enum {
+  PROBE_UPDATE,
+  UPDATE_FIRMWARE,
+  UPDATE_SPIFFS
 };
 #endif
 

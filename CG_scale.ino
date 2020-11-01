@@ -1,14 +1,17 @@
 /*
   ------------------------------------------------------------------
                             CG scale
-                      (c) 2019 by M. Lehmann
+                      (c) 2019-2020 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "2.11"
+#define CGSCALE_VERSION "2.2"
 /*
 
   ******************************************************************
   history:
+  V2.2    01.11.20     Virtual weights built in
+  V2.12   07.10.20     bug fixed: LR value was displayed in the wrong display position
+                       Voltage for specified battery types deleted
   V2.11   18.08.20     code is now compatible with standard OLED displays
                        and original code base (default pw length = 32)
   V2.1    18.07.20     added support for ESP8266 based Wifi Kit 8
@@ -95,7 +98,7 @@
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
-#include <ESP8266HTTPUpdateServer.h>
+#include <ElegantOTA.h>
 #include <ArduinoJson.h>
 #endif
 
@@ -117,12 +120,18 @@ HX711_ADC LoadCell[] {HX711_ADC(PIN_LOADCELL1_DOUT, PIN_LOADCELL1_PD_SCK), HX711
 #if defined(ESP8266)
 ESP8266WebServer server(80);
 IPAddress apIP(ip[0], ip[1], ip[2], ip[3]);
-ESP8266HTTPUpdateServer httpUpdater;
 WiFiClientSecure httpsClient;
 File fsUploadFile;              // a File object to temporarily store the received file
 #endif
 
 #include "defaults.h"
+
+struct VirtualWeight {
+  String name;
+  float cg;
+  float weight;
+  bool enabled = false;
+};
 
 struct Model {
   float distance[3] = {DISTANCE_X1, DISTANCE_X2, DISTANCE_X3};
@@ -131,6 +140,7 @@ struct Model {
   float targetCGmin = 0;
   float targetCGmax = 0;
   uint8_t mechanicsType = 0;
+  VirtualWeight virtualWeight[MAX_VIRTUAL_WEIGHT];
 #endif
 };
 
@@ -186,6 +196,88 @@ void(* resetCPU) (void) = 0;
 void resetCPU() {}
 #endif
 
+
+// convert time to string
+char * TimeToString(unsigned long t)
+{
+  static char str[13];
+  int h = t / 3600000;
+  t = t % 3600000;
+  int m = t / 60000;
+  t = t % 60000;
+  int s = t / 1000;
+  int ms = t - (s * 1000);
+  sprintf(str, "%02ld:%02d:%02d.%03d", h, m, s, ms);
+  return str;
+}
+
+
+// Count percentage from cell voltage
+int percentBat(float cellVoltage) {
+
+  int result = 0;
+  int elementCount = DATAPOINTS_PERCENTLIST;
+  byte batTypeArray = batType - 2;
+
+  for (int i = 0; i < elementCount; i++) {
+    if (pgm_read_float( &percentList[batTypeArray][i][1]) == 100 ) {
+      elementCount = i;
+      break;
+    }
+  }
+
+  float cellempty = pgm_read_float( &percentList[batTypeArray][0][0]);
+  float cellfull = pgm_read_float( &percentList[batTypeArray][elementCount][0]);
+
+  if (cellVoltage >= cellfull) {
+    result = 100;
+  } else if (cellVoltage <= cellempty) {
+    result = 0;
+  } else {
+    for (int i = 0; i <= elementCount; i++) {
+      float curVolt = pgm_read_float(&percentList[batTypeArray][i][0]);
+      if (curVolt >= cellVoltage && i > 0) {
+        float lastVolt = pgm_read_float(&percentList[batTypeArray][i - 1][0]);
+        float curPercent = pgm_read_float(&percentList[batTypeArray][i][1]);
+        float lastPercent = pgm_read_float(&percentList[batTypeArray][i - 1][1]);
+        result = float((cellVoltage - lastVolt) / (curVolt - lastVolt)) * (curPercent - lastPercent) + lastPercent;
+        break;
+      }
+    }
+  }
+
+  return result;
+}
+
+
+void printConsole(int t, String msg) {
+  Serial.print(TimeToString(millis()));
+  Serial.print(" [");
+  switch (t) {
+    case T_BOOT:
+      Serial.print("BOOT");
+      break;
+    case T_RUN:
+      Serial.print("RUN");
+      break;
+    case T_ERROR:
+      Serial.print("ERROR");
+      break;
+    case T_WIFI:
+      Serial.print("WIFI");
+      break;
+    case T_UPDATE:
+      Serial.print("UPDATE");
+      break;
+    case T_HTTPS:
+      Serial.print("HTTPS");
+      break;
+  }
+  Serial.print("] ");
+  Serial.println(msg);
+}
+
+
 void initOLED() {
   oledDisplay.begin();
   oledDisplayHeight = oledDisplay.getDisplayHeight();
@@ -236,12 +328,12 @@ void initOLED() {
     } else {
       oledDisplay.setCursor(20, 64);
     }
-    oledDisplay.print(F("(c) 2019 M.Lehmann et al."));
+    oledDisplay.print(F("(c) 2020 M.Lehmann"));
 
   } while ( oledDisplay.nextPage() );
 }
 
-void printOLED(String aLine1, String aLine2, String aLine3 = String(""));
+//void printOLED(String aLine1, String aLine2, String aLine3 = String(""));
 
 void printOLED(String aLine1, String aLine2, String aLine3) {
   int ylineHeight = oledDisplayHeight / 3;
@@ -253,26 +345,14 @@ void printOLED(String aLine1, String aLine2, String aLine3) {
     oledDisplay.print(aLine1);
     oledDisplay.setCursor(0, ylineHeight * 2);
     oledDisplay.print(aLine2);
-    if (aLine3 == "") {
-      oledDisplay.drawLine(0, ylineHeight * 2 + 2, oledDisplayWidth, ylineHeight * 2 + 2);
-      oledDisplay.setFont(oledFontTiny);
-      oledDisplay.setCursor(0, oledDisplayHeight);
-      oledDisplay.print("IP:" + WiFi.localIP().toString());
-      String signature = "CG scale: V" + String(CGSCALE_VERSION);
-      oledDisplay.setCursor(oledDisplayWidth - oledDisplay.getStrWidth(signature.c_str()), oledDisplayHeight);
-      oledDisplay.print(signature);
-    } else {
-      oledDisplay.setCursor(0, oledDisplayHeight);
-      oledDisplay.print(aLine3);
-    }
+    oledDisplay.setCursor(0, oledDisplayHeight);
+    oledDisplay.print(aLine3);
   } while ( oledDisplay.nextPage() );
 }
 
 void printScaleOLED() {
   // print to display
-  char buff1[8];
-  char buff[12];
-  char buff2[8];
+  char buff[8];
   int pos_weightTotal = 7;
   int pos_CG_length = 28;
   if (nLoadcells == 2) {
@@ -289,26 +369,26 @@ void printScaleOLED() {
     if (errMsgCnt == 0) {
       // print battery
       if (batType > B_OFF) {
-        oledDisplay.drawXBMP(48, 1, 12, 6, batteryImage);
-        float percentVolt = percentBat(batVolt / batCells);
-        dtostrf(percentVolt, 3, 0, buff);
-        oledDisplay.drawBox(49, 2, (percentVolt / (100 / 8)), 4);
-
-        oledDisplay.setFont(oledFontSmall);
-        oledDisplay.setCursor(78 - oledDisplay.getStrWidth(buff), 7);
-        if (batType > B_VOLT) {
-          dtostrf(percentVolt, 3, 0, buff);
-          oledDisplay.print(buff);
-          oledDisplay.print(F("%/"));
+        oledDisplay.drawXBMP(88, 1, 12, 6, batteryImage);
+        if (batType == B_VOLT) {
+          dtostrf(batVolt, 2, 2, buff);
+        } else {
+          dtostrf(batVolt, 3, 0, buff);
+          oledDisplay.drawBox(89, 2, (batVolt / (100 / 8)), 4);
         }
-        dtostrf(batVolt, 2, 2, buff);
+        oledDisplay.setFont(oledFontSmall);
+        oledDisplay.setCursor(123 - oledDisplay.getStrWidth(buff), 7);
         oledDisplay.print(buff);
-        oledDisplay.print(F("V"));
+        if (batType == B_VOLT) {
+          oledDisplay.print(F("V"));
+        } else {
+          oledDisplay.print(F("%"));
+        }
       }
  
       // print total weight
       oledDisplay.setFont(oledFontNormal);
-      dtostrf(weightTotal, 7, 1, buff);
+      dtostrf(weightTotal, 5, 1, buff);
       if (oledDisplayHeight <= 32) {
         oledDisplay.setCursor(1, 18);
         oledDisplay.print(F("M  = "));
@@ -320,7 +400,7 @@ void printScaleOLED() {
       oledDisplay.print(F(" g"));
 
       // print CG longitudinal axis
-      dtostrf(CG_length, 7, 1, buff);
+      dtostrf(CG_length, 5, 1, buff);
       if (oledDisplayHeight <= 32) {
         oledDisplay.setCursor(1, 32);
         oledDisplay.print(F("CG = "));
@@ -338,9 +418,9 @@ void printScaleOLED() {
           oledDisplay.print(F("LR="));
           dtostrf(CG_trans, 3, 0, buff);
         } else {
+          dtostrf(CG_trans, 5, 1, buff);
           oledDisplay.drawXBMP(2, 47, 18, 18, CGtransImage);
           oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), 64);
-          dtostrf(CG_trans, 7, 1, buff);
         }
         oledDisplay.print(buff);
         oledDisplay.print(F(" mm"));
@@ -355,7 +435,6 @@ void printScaleOLED() {
 
   } while ( oledDisplay.nextPage() );
 }
-
 
 
 #ifdef PIN_TARE_BUTTON
@@ -460,43 +539,631 @@ bool getLoadcellError() {
 }
 
 
-// Count percentage from cell voltage
-int percentBat(float cellVoltage) {
+#if defined(ESP8266)
 
-  int result = 0;
-  int elementCount = DATAPOINTS_PERCENTLIST;
-  byte batTypeArray = batType - 2;
+void writeModelData(JsonObject object) {
+  char buff[8];
+  String stringBuff;
 
-  for (int i = 0; i < elementCount; i++) {
-    if (pgm_read_float( &percentList[batTypeArray][i][1]) == 100 ) {
-      elementCount = i;
-      break;
-    }
+  dtostrf(weightTotal, 5, 1, buff);
+  stringBuff = buff;
+  stringBuff.trim();
+  object["wt"] = stringBuff;
+  dtostrf(CG_length, 5, 1, buff);
+  stringBuff = buff;
+  stringBuff.trim();
+  object["cg"] = stringBuff;
+  dtostrf(CG_trans, 5, 1, buff);
+  stringBuff = buff;
+  stringBuff.trim();
+  object["cglr"] = stringBuff;
+  object["x1"] = model.distance[X1];
+  object["x2"] = model.distance[X2];
+  object["x3"] = model.distance[X3];
+  object["cgmin"] = model.targetCGmin;
+  object["cgmax"] = model.targetCGmax;
+  object["mType"] = model.mechanicsType;
+
+  JsonArray virtw = object.createNestedArray("virtual");
+  for (int i=0; i < MAX_VIRTUAL_WEIGHT; i++){
+    JsonArray virtWeight = virtw.createNestedArray();
+    virtWeight.add(model.virtualWeight[i].name);
+    virtWeight.add(model.virtualWeight[i].cg);
+    virtWeight.add(model.virtualWeight[i].weight);
+    virtWeight.add(model.virtualWeight[i].enabled);
   }
-
-  float cellempty = pgm_read_float( &percentList[batTypeArray][0][0]);
-  float cellfull = pgm_read_float( &percentList[batTypeArray][elementCount][0]);
-
-  if (cellVoltage >= cellfull) {
-    result = 100;
-  } else if (cellVoltage <= cellempty) {
-    result = 0;
-  } else {
-    for (int i = 0; i <= elementCount; i++) {
-      float curVolt = pgm_read_float(&percentList[batTypeArray][i][0]);
-      if (curVolt >= cellVoltage && i > 0) {
-        float lastVolt = pgm_read_float(&percentList[batTypeArray][i - 1][0]);
-        float curPercent = pgm_read_float(&percentList[batTypeArray][i][1]);
-        float lastPercent = pgm_read_float(&percentList[batTypeArray][i - 1][1]);
-        result = float((cellVoltage - lastVolt) / (curVolt - lastVolt)) * (curPercent - lastPercent) + lastPercent;
-        break;
-      }
-    }
-  }
-
-  return result;
 }
 
+
+// save model to json file
+bool saveModelJson(String modelName) {
+
+  if (modelName.length() > MAX_MODELNAME_LENGHT) {
+    return false;
+  }
+
+  StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+
+  if (SPIFFS.exists(MODEL_FILE)) {
+    // read json file
+    File f = SPIFFS.open(MODEL_FILE, "r");
+    auto error = deserializeJson(jsonDoc, f);
+    f.close();
+    if (error) {
+      return false;
+    }
+    // check if model exists
+    if (jsonDoc.containsKey(modelName)) {
+      writeModelData(jsonDoc[modelName]);
+    } else {
+      // otherwise create new
+      writeModelData(jsonDoc.createNestedObject(modelName));
+    }
+    // write to file
+    if (!error) {
+      f = SPIFFS.open(MODEL_FILE, "w");
+      serializeJson(jsonDoc, f);
+      f.close();
+    } else {
+      return false;
+    }
+  } else {
+    // creat new json
+    writeModelData(jsonDoc.createNestedObject(modelName));
+    // write to file
+    if (!jsonDoc.isNull()) {
+      File f = SPIFFS.open(MODEL_FILE, "w");
+      serializeJson(jsonDoc, f);
+      f.close();
+    } else {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+
+// read model data from json file
+bool openModelJson(String modelName) {
+
+  StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+
+  if (SPIFFS.exists(MODEL_FILE)) {
+    // read json file
+    File f = SPIFFS.open(MODEL_FILE, "r");
+    auto error = deserializeJson(jsonDoc, f);
+    f.close();
+    if (error) {
+      return false;
+    }
+    // check if model exists
+    if (jsonDoc.containsKey(modelName)) {
+      // load parameters from model
+      model.distance[X1] = jsonDoc[modelName]["x1"];
+      model.distance[X2] = jsonDoc[modelName]["x2"];
+      model.distance[X3] = jsonDoc[modelName]["x3"];
+      model.targetCGmin = jsonDoc[modelName]["cgmin"];
+      model.targetCGmax = jsonDoc[modelName]["cgmax"];
+      model.mechanicsType = jsonDoc[modelName]["mType"];
+
+      JsonArray virtw = jsonDoc[modelName]["virtual"];
+      if(virtw){
+        for (int i=0; i < MAX_VIRTUAL_WEIGHT; i++){
+          model.virtualWeight[i].name = virtw[i][0].as<String>();
+          model.virtualWeight[i].cg = virtw[i][1].as<int>();
+          model.virtualWeight[i].weight = virtw[i][2].as<int>();
+          model.virtualWeight[i].enabled = virtw[i][3].as<bool>();
+        }
+      }
+    } else {
+      return false;
+    }
+
+    // save current model name to eeprom
+    modelName.toCharArray(model.name, MAX_MODELNAME_LENGHT + 1);
+    EEPROM.put(P_MODELNAME, model.name);
+    EEPROM.commit();
+
+    return true;
+  }
+
+  return false;
+}
+
+
+// delete model from json file
+bool deleteModelJson(String modelName) {
+
+  StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+
+  if (SPIFFS.exists(MODEL_FILE)) {
+    // read json file
+    File f = SPIFFS.open(MODEL_FILE, "r");
+    auto error = deserializeJson(jsonDoc, f);
+    f.close();
+    if (error) {
+      return false;
+    }
+    // check if model exists
+    if (jsonDoc.containsKey(modelName)) {
+      jsonDoc.remove(modelName);
+    } else {
+      return false;
+    }
+    // if no models in json, kill it
+    if (jsonDoc.size() == 0) {
+      SPIFFS.remove(MODEL_FILE);
+    } else {
+      // write to file
+      if (!jsonDoc.isNull()) {
+        File f = SPIFFS.open(MODEL_FILE, "w");
+        serializeJson(jsonDoc, f);
+        f.close();
+      } else {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return false;
+
+}
+
+
+// send headvalues to client
+void getHead() {
+  String response = ssid_AP;
+  response += "&";
+  for (int i = 1; i <= errMsgCnt; i++) {
+    response += errMsg[i];
+  }
+  response += "&";
+  response += CGSCALE_VERSION;
+  response += "&";
+  response += gitVersion;
+  server.send(200, "text/html", response);
+}
+
+
+// send values to client
+void getValue() {
+  char buff[8];
+  String response = "";
+  dtostrf(weightTotal, 5, 1, buff);
+  response += buff;
+  response += "g&";
+  dtostrf(CG_length, 5, 1, buff);
+  response += buff;
+  response += "mm&";
+  dtostrf(CG_trans, 5, 1, buff);
+  response += buff;
+  response += "mm&";
+  if (batType == B_VOLT) {
+    dtostrf(batVolt, 5, 2, buff);
+    response += buff;
+    response += "V";
+  } else {
+    dtostrf(batVolt, 5, 0, buff);
+    response += buff;
+    response += "%";
+  }
+  server.send(200, "text/html", response);
+}
+
+
+// send raw values to client
+void getRawValue() {
+  char buff[8];
+  String response = "";
+  dtostrf(weightLoadCell[LC1], 5, 1, buff);
+  response += buff;
+  response += "g&";
+  dtostrf(weightLoadCell[LC2], 5, 1, buff);
+  response += buff;
+  response += "g&";
+  dtostrf(weightLoadCell[LC3], 5, 1, buff);
+  response += buff;
+  response += "g&";
+  if (batType == B_VOLT) {
+    dtostrf(batVolt, 5, 2, buff);
+    response += buff;
+    response += "V";
+  } else {
+    dtostrf(batVolt, 5, 0, buff);
+    response += buff;
+    response += "%";
+  }
+  server.send(200, "text/html", response);
+}
+
+
+// send parameters to client
+void getParameter() {
+  char buff[8];
+  String response = "";
+  float weightTotal_saved = 0;
+  float CG_length_saved = 0;
+  float CG_trans_saved = 0;
+  model.targetCGmin = 0;
+  model.targetCGmax = 0;
+
+  StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+
+  if (SPIFFS.exists(MODEL_FILE)) {
+    // read json file
+    File f = SPIFFS.open(MODEL_FILE, "r");
+    auto error = deserializeJson(jsonDoc, f);
+    f.close();
+    // check if model exists
+    if (!error && jsonDoc.containsKey(model.name)) {
+      weightTotal_saved = jsonDoc[model.name]["wt"];
+      CG_length_saved = jsonDoc[model.name]["cg"];
+      CG_trans_saved = jsonDoc[model.name]["cglr"];
+      model.targetCGmin = jsonDoc[model.name]["cgmin"];
+      model.targetCGmax = jsonDoc[model.name]["cgmax"];
+      model.mechanicsType = jsonDoc[model.name]["mType"];
+    }
+  }
+
+  // parameter list
+  response += nLoadcells;
+  response += "&";
+  for (int i = X1; i <= X3; i++) {
+    response += model.distance[i];
+    response += "&";
+  }
+  response += refWeight;
+  response += "&";
+  response += refCG;
+  response += "&";
+  for (int i = LC1; i <= LC3; i++) {
+    response += calFactorLoadcell[i];
+    response += "&";
+  }
+  for (int i = R1; i <= R2; i++) {
+    response += resistor[i];
+    response += "&";
+  }
+  response += batType;
+  response += "&";
+  response += batCells;
+  response += "&";
+  response += ssid_STA;
+  response += "&";
+  response += password_STA;
+  response += "&";
+  response += ssid_AP;
+  response += "&";
+  response += password_AP;
+  response += "&";
+  response += model.name;
+  response += "&";
+  dtostrf(weightTotal_saved, 5, 1, buff);
+  response += buff;
+  response += "g&";
+  dtostrf(CG_length_saved, 5, 1, buff);
+  response += buff;
+  response += "mm&";
+  dtostrf(CG_trans_saved, 5, 1, buff);
+  response += buff;
+  response += "mm&";
+  response += model.targetCGmin;
+  response += "&";
+  response += model.targetCGmax;
+  response += "&";
+  response += model.mechanicsType;
+  response += "&";
+  response += enableUpdate;
+  response += "&";
+  response += enableOTA;
+  server.send(200, "text/html", response);
+}
+
+
+// send virtual weights to client
+void getVirtualWeight() {
+  String response = "";
+  StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+
+  JsonArray virtw = jsonDoc.createNestedArray("virtual");
+  for (int i=0; i < MAX_VIRTUAL_WEIGHT; i++){
+    JsonArray virtWeight = virtw.createNestedArray();
+    virtWeight.add(model.virtualWeight[i].name);
+    virtWeight.add(model.virtualWeight[i].cg);
+    virtWeight.add(model.virtualWeight[i].weight);
+    virtWeight.add(model.virtualWeight[i].enabled);
+  }
+
+  serializeJson(jsonDoc["virtual"], response);
+  server.send(200, "text/html", response);
+}
+
+
+// send available WiFi networks to client
+void getWiFiNetworks() {
+  bool ssidSTAavailable = false;
+  String response = "";
+  int n = WiFi.scanNetworks();
+
+  if (n > 0) {
+    for (int i = 0; i < n; ++i) {
+      response += WiFi.SSID(i);
+      if (WiFi.SSID(i) == ssid_STA) ssidSTAavailable = true;
+      if (i < n - 1) response += "&";
+    }
+    if (!ssidSTAavailable) {
+      response += "&";
+      response += ssid_STA;
+    }
+  }
+  server.send(200, "text/html", response);
+}
+
+
+// save parameters
+void saveParameter() {
+  if (server.hasArg("nLoadcells")) nLoadcells = server.arg("nLoadcells").toInt();
+  if (server.hasArg("distanceX1")) model.distance[X1] = server.arg("distanceX1").toFloat();
+  if (server.hasArg("distanceX2")) model.distance[X2] = server.arg("distanceX2").toFloat();
+  if (server.hasArg("distanceX3")) model.distance[X3] = server.arg("distanceX3").toFloat();
+  if (server.hasArg("refWeight")) refWeight = server.arg("refWeight").toFloat();
+  if (server.hasArg("refCG")) refCG = server.arg("refCG").toFloat();
+  if (server.hasArg("calFactorLoadcell1")) calFactorLoadcell[LC1] = server.arg("calFactorLoadcell1").toFloat();
+  if (server.hasArg("calFactorLoadcell2")) calFactorLoadcell[LC2] = server.arg("calFactorLoadcell2").toFloat();
+  if (server.hasArg("calFactorLoadcell3")) calFactorLoadcell[LC3] = server.arg("calFactorLoadcell3").toFloat();
+  if (server.hasArg("resistorR1")) resistor[R1] = server.arg("resistorR1").toFloat();
+  if (server.hasArg("resistorR2")) resistor[R2] = server.arg("resistorR2").toFloat();
+  if (server.hasArg("batType")) batType = server.arg("batType").toInt();
+  if (server.hasArg("batCells")) batCells = server.arg("batCells").toInt();
+  if (server.hasArg("ssid_STA")) server.arg("ssid_STA").toCharArray(ssid_STA, MAX_SSID_PW_LENGHT + 1);
+  if (server.hasArg("password_STA")) server.arg("password_STA").toCharArray(password_STA, MAX_SSID_PW_LENGHT + 1);
+  if (server.hasArg("ssid_AP")) server.arg("ssid_AP").toCharArray(ssid_AP, MAX_SSID_PW_LENGHT + 1);
+  if (server.hasArg("password_AP")) server.arg("password_AP").toCharArray(password_AP, MAX_SSID_PW_LENGHT + 1);
+  if (server.hasArg("mechanicsType")) model.mechanicsType = server.arg("mechanicsType").toInt();
+  if (server.hasArg("enableUpdate")) enableUpdate = server.arg("enableUpdate").toInt();
+  if (server.hasArg("enableOTA")) enableOTA = server.arg("enableOTA").toInt();
+
+  EEPROM.put(P_NUMBER_LOADCELLS, nLoadcells);
+  for (int i = LC1; i <= LC3; i++) {
+    EEPROM.put(P_DISTANCE_X1 + (i * sizeof(float)), model.distance[i]);
+    saveCalFactor(i);
+  }
+  EEPROM.put(P_REF_WEIGHT, refWeight);
+  EEPROM.put(P_REF_CG, refCG);
+  for (int i = R1; i <= R2; i++) {
+    EEPROM.put(P_RESISTOR_R1 + (i * sizeof(float)), resistor[i]);
+  }
+  EEPROM.put(P_BAT_TYPE, batType);
+  EEPROM.put(P_BATT_CELLS, batCells);
+  EEPROM.put(P_SSID_STA, ssid_STA);
+  EEPROM.put(P_PASSWORD_STA, password_STA);
+  EEPROM.put(P_SSID_AP, ssid_AP);
+  EEPROM.put(P_PASSWORD_AP, password_AP);
+  EEPROM.put(P_ENABLE_UPDATE, enableUpdate);
+  EEPROM.put(P_ENABLE_OTA, enableOTA);
+  EEPROM.commit();
+
+  if (model.name != "") {
+    saveModelJson(model.name);
+  }
+
+  server.send(200, "text/plain", "saved");
+}
+
+
+// calibrate cg scale
+void autoCalibrate() {
+  while (!runAutoCalibrate());
+  server.send(200, "text/plain", "Calibration successful");
+}
+
+
+// tare cg scale
+void runTare() {
+  tareLoadcells();
+  if (!getLoadcellError()) {
+    server.send(200, "text/plain", "Tare completed");
+    return;
+  }
+  server.send(404, "text/plain", "404: Tare failed !");
+}
+
+
+// save model
+void saveModel() {
+  if (server.hasArg("modelname")) {
+    if (server.hasArg("targetCGmin")) model.targetCGmin = server.arg("targetCGmin").toFloat();
+    if (server.hasArg("targetCGmax")) model.targetCGmax = server.arg("targetCGmax").toFloat();
+    if (server.hasArg("distanceX1")) model.distance[X1] = server.arg("distanceX1").toFloat();
+    if (server.hasArg("distanceX2")) model.distance[X2] = server.arg("distanceX2").toFloat();
+    if (server.hasArg("distanceX3")) model.distance[X3] = server.arg("distanceX3").toFloat();
+    if (server.hasArg("mechanicsType")) model.mechanicsType = server.arg("mechanicsType").toInt();
+    if(server.hasArg("virtualWeight")){    
+      StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+      String json = server.arg("virtualWeight");
+      json.replace("%22", "\"");
+      deserializeJson(jsonDoc, json);
+      JsonArray virtw = jsonDoc["virtual"];
+      if(virtw){
+        for (int i=0; i < MAX_VIRTUAL_WEIGHT; i++){
+          model.virtualWeight[i].name = virtw[i][0].as<String>();
+          model.virtualWeight[i].weight = virtw[i][1].as<int>();
+          model.virtualWeight[i].cg = virtw[i][2].as<int>();
+          model.virtualWeight[i].enabled = virtw[i][3].as<bool>();
+        }
+      }
+    }
+      
+    if (saveModelJson(server.arg("modelname"))) {
+      server.send(200, "text/plain", "saved");
+      return;
+    }
+  }
+  server.send(404, "text/plain", "404: Save model failed !");
+}
+
+
+// open model
+void openModel() {
+  if (server.hasArg("modelname")) {
+    if (openModelJson(server.arg("modelname"))) {
+      server.send(200, "text/plain", "opened");
+      return;
+    }
+  }
+  server.send(404, "text/plain", "404: Open model failed !");
+}
+
+
+// delete model
+void deleteModel() {
+  if (server.hasArg("modelname")) {
+    if (deleteModelJson(server.arg("modelname"))) {
+      server.send(200, "text/plain", "deleted");
+      return;
+    }
+  }
+  server.send(404, "text/plain", "404: Delete model failed !");
+}
+
+
+// convert the file extension to the MIME type
+String getContentType(String filename) {
+  if (filename.endsWith(".html")) return "text/html";
+  else if (filename.endsWith(".png")) return "text/css";
+  else if (filename.endsWith(".css")) return "text/css";
+  else if (filename.endsWith(".js")) return "application/javascript";
+  else if (filename.endsWith(".map")) return "application/json";
+  else if (filename.endsWith(".ico")) return "image/x-icon";
+  else if (filename.endsWith(".gz")) return "application/x-gzip";
+  return "text/plain";
+}
+
+
+// send file to the client (if it exists)
+bool handleFileRead(String path) {
+  // If a folder is requested, send the index file
+  if (path.endsWith("/")) path += "index.html";
+  String contentType = getContentType(path);
+  String pathWithGz = path + ".gz";
+
+  // If the file exists, either as a compressed archive, or normal
+  if (SPIFFS.exists(pathWithGz) || SPIFFS.exists(path)) {
+    if (SPIFFS.exists(pathWithGz))
+      path += ".gz";
+    File file = SPIFFS.open(path, "r");
+    size_t sent = server.streamFile(file, contentType);
+    file.close();
+    return true;
+  }
+
+  return false;
+}
+
+
+// upload a new file to the SPIFFS
+void handleFileUpload() {
+
+  HTTPUpload& upload = server.upload();
+
+  if (upload.status == UPLOAD_FILE_START) {
+    String filename = upload.filename;
+    if (!filename.startsWith("/")) filename = "/" + filename;
+    if (filename != MODEL_FILE ) server.send(500, "text/plain", "wrong file !");
+    // Open the file for writing in SPIFFS (create if it doesn't exist)
+    fsUploadFile = SPIFFS.open(filename, "w");
+    filename = String();
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    // Write the received bytes to the file
+    fsUploadFile.write(upload.buf, upload.currentSize);
+  } else if (upload.status == UPLOAD_FILE_END) {
+    // If the file was successfully created
+    if (fsUploadFile) {
+      fsUploadFile.close();
+      // Redirect the client to the success page
+      server.sendHeader("Location", "/settings.html");
+      server.send(303);
+    } else {
+      server.send(500, "text/plain", "500: couldn't create file");
+    }
+  }
+
+}
+
+
+// print update progress screen
+void printUpdateProgress(unsigned int progress, unsigned int total) {
+  printConsole(T_UPDATE, updateMsg);
+
+  oledDisplay.firstPage();
+  do {
+    oledDisplay.setFont(oledFontSmall);
+    oledDisplay.setCursor(0, 12);
+    oledDisplay.print(updateMsg);
+
+    oledDisplay.setCursor(107, 35);
+    oledDisplay.printf("%u%%\r", (progress / (total / 100)));
+
+    oledDisplay.drawFrame(0, 40, 128, 10);
+    oledDisplay.drawBox(0, 40, (progress / (total / 128)), 10);
+
+  } while ( oledDisplay.nextPage() );
+}
+
+
+// https update
+bool httpsUpdate(uint8_t command) {
+  if (!httpsClient.connect(HOST, HTTPS_PORT)) {
+    printConsole(T_ERROR, "Wifi: connection to GIT failed");
+    return false;
+  }
+
+  const char * headerKeys[] = {"Location"} ;
+  const size_t numberOfHeaders = 1;
+
+  HTTPClient https;
+  https.setUserAgent("cgscale");
+  https.setRedirectLimit(0);
+  https.setFollowRedirects(true);
+
+  String url = "https://" + String(HOST) + String(URL);
+  if (https.begin(httpsClient, url)) {
+    https.collectHeaders(headerKeys, numberOfHeaders);
+
+    printConsole(T_HTTPS, "GET: " + url);
+    int httpCode = https.GET();
+    if (httpCode > 0) {
+      // response
+      if (httpCode == HTTP_CODE_FOUND) {
+        String newUrl = https.header("Location");
+        gitVersion = newUrl.substring(newUrl.lastIndexOf('/') + 2).toFloat();
+        if (gitVersion > String(CGSCALE_VERSION).toFloat()) {
+          printConsole(T_UPDATE, "Firmware update available: V" + String(gitVersion));
+        } else {
+          printConsole(T_UPDATE, "Firmware version found on GitHub: V" + String(gitVersion) + " - current firmware is up to date");
+        }
+      } else if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+        //Serial.println(https.getString());
+      } else {
+        printConsole(T_ERROR, "HTTPS: GET... failed, " + https.errorToString(httpCode));
+        https.end();
+        return false;
+      }
+    } else {
+      return false;
+    }
+    https.end();
+  } else {
+    printConsole(T_ERROR, "Wifi: Unable to connect");
+    return false;
+  }
+
+  return true;
+}
+
+#endif
 
 
 void setup() {
@@ -672,11 +1339,11 @@ void setup() {
   if (wifiSTAmode) {
     printOLED("WiFi: " + String(ssid_STA),
               "Host: " + String(hostname),
-              "IP  : " + WiFi.localIP().toString());
+              "IP: " + WiFi.localIP().toString());
   } else {
     printOLED("WiFi: " + String(ssid_AP),
               "Host: " + String(hostname),
-              "IP  : " + WiFi.softAPIP().toString());
+              "IP: " + WiFi.softAPIP().toString());
   }
 
   delay(3000);
@@ -687,6 +1354,7 @@ void setup() {
   server.on("/getRawValue", getRawValue);
   server.on("/getParameter", getParameter);
   server.on("/getWiFiNetworks", getWiFiNetworks);
+  server.on("/getVirtualWeight", getVirtualWeight);
   server.on("/saveParameter", saveParameter);
   server.on("/autoCalibrate", autoCalibrate);
   server.on("/tare", runTare);
@@ -705,8 +1373,8 @@ void setup() {
       server.send(404, "text/plain", "CGscale Error: 404\n File or URL not Found !");
   });
 
-  // init http updater
-  httpUpdater.setup(&server);
+  // init ElegantOTA
+  ElegantOTA.begin(&server);
 
   // init webserver
   server.begin();
@@ -826,6 +1494,28 @@ void loop() {
       } else if (model.mechanicsType == 3) {
         CG_length = ((weightLoadCell[LC2] * model.distance[X2]) / weightTotal) * -1 + model.distance[X1];
       }
+
+      /* Virtual weights 
+
+      m = weight
+      d = cg
+      d_new=(m1*d1+m2*d2)/(m1+m2)
+      */
+
+      for (int i=0; i < MAX_VIRTUAL_WEIGHT; i++){
+        if(model.virtualWeight[i].enabled == true){
+          CG_length = (weightTotal * CG_length + model.virtualWeight[i].weight * model.virtualWeight[i].cg) / (weightTotal + model.virtualWeight[i].weight);
+        }
+      }
+
+      for (int i=0; i < MAX_VIRTUAL_WEIGHT; i++){
+        if(model.virtualWeight[i].enabled == true){
+          weightTotal +=  model.virtualWeight[i].weight;
+        }
+      }
+
+      
+      
 #endif
 
       // CG transverse axis
@@ -841,6 +1531,11 @@ void loop() {
     // read battery voltage
     if (batType > B_OFF) {
       batVolt = (analogRead(VOLTAGE_PIN) / 1024.0) * V_REF * ((resistor[R1] + resistor[R2]) / resistor[R2]) / 1000.0;
+#if ENABLE_PERCENTLIST
+      if (batType > B_VOLT) {
+        batVolt = percentBat(batVolt / batCells);
+      }
+#endif
     }
 
     printScaleOLED();
@@ -1201,628 +1896,3 @@ void loop() {
     }
   }
 }
-
-
-
-#if defined(ESP8266)
-
-// send headvalues to client
-void getHead() {
-  String response = ssid_AP;
-  response += "&";
-  for (int i = 1; i <= errMsgCnt; i++) {
-    response += errMsg[i];
-  }
-  response += "&";
-  response += CGSCALE_VERSION;
-  response += "&";
-  response += gitVersion;
-  server.send(200, "text/html", response);
-}
-
-
-// send values to client
-void getValue() {
-  char buff[8];
-  String response = "";
-  dtostrf(weightTotal, 5, 1, buff);
-  response += buff;
-  response += "g&";
-  dtostrf(CG_length, 5, 1, buff);
-  response += buff;
-  response += "mm&";
-  dtostrf(CG_trans, 5, 1, buff);
-  response += buff;
-  response += "mm&";
-  if (batType == B_VOLT) {
-    dtostrf(batVolt, 5, 2, buff);
-    response += buff;
-    response += "V";
-  } else {
-    float percentVolt = percentBat(batVolt / batCells);
-    dtostrf(percentVolt, 5, 0, buff);
-    response += buff;
-    response += "%/";
-    dtostrf(batVolt, 5, 2, buff);
-    response += buff;
-    response += "V";
-  }
-  Serial.print("send response: ");
-  Serial.println(response);
-  server.send(200, "text/html", response);
-}
-
-
-// send raw values to client
-void getRawValue() {
-  char buff[8];
-  String response = "";
-  dtostrf(weightLoadCell[LC1], 5, 1, buff);
-  response += buff;
-  response += "g&";
-  dtostrf(weightLoadCell[LC2], 5, 1, buff);
-  response += buff;
-  response += "g&";
-  dtostrf(weightLoadCell[LC3], 5, 1, buff);
-  response += buff;
-  response += "g&";
-  if (batType == B_VOLT) {
-    dtostrf(batVolt, 5, 2, buff);
-    response += buff;
-    response += "V";
-  } else {
-    float percentVolt = percentBat(batVolt / batCells);
-    dtostrf(percentVolt, 5, 0, buff);
-    response += buff;
-    response += "%/";
-    dtostrf(batVolt, 5, 2, buff);
-    response += buff;
-    response += "V";
-  }
-  server.send(200, "text/html", response);
-}
-
-
-// send parameters to client
-void getParameter() {
-  char buff[8];
-  String response = "";
-  float weightTotal_saved = 0;
-  float CG_length_saved = 0;
-  float CG_trans_saved = 0;
-  model.targetCGmin = 0;
-  model.targetCGmax = 0;
-
-  StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
-
-  if (SPIFFS.exists(MODEL_FILE)) {
-    // read json file
-    File f = SPIFFS.open(MODEL_FILE, "r");
-    auto error = deserializeJson(jsonDoc, f);
-    f.close();
-    // check if model exists
-    if (!error && jsonDoc.containsKey(model.name)) {
-      weightTotal_saved = jsonDoc[model.name]["wt"];
-      CG_length_saved = jsonDoc[model.name]["cg"];
-      CG_trans_saved = jsonDoc[model.name]["cglr"];
-      model.targetCGmin = jsonDoc[model.name]["cgmin"];
-      model.targetCGmax = jsonDoc[model.name]["cgmax"];
-      model.mechanicsType = jsonDoc[model.name]["mType"];
-    }
-  }
-
-  // parameter list
-  response += nLoadcells;
-  response += "&";
-  for (int i = X1; i <= X3; i++) {
-    response += model.distance[i];
-    response += "&";
-  }
-  response += refWeight;
-  response += "&";
-  response += refCG;
-  response += "&";
-  for (int i = LC1; i <= LC3; i++) {
-    response += calFactorLoadcell[i];
-    response += "&";
-  }
-  for (int i = R1; i <= R2; i++) {
-    response += resistor[i];
-    response += "&";
-  }
-  response += batType;
-  response += "&";
-  response += batCells;
-  response += "&";
-  response += ssid_STA;
-  response += "&";
-  response += password_STA;
-  response += "&";
-  response += ssid_AP;
-  response += "&";
-  response += password_AP;
-  response += "&";
-  response += model.name;
-  response += "&";
-  dtostrf(weightTotal_saved, 5, 1, buff);
-  response += buff;
-  response += "g&";
-  dtostrf(CG_length_saved, 5, 1, buff);
-  response += buff;
-  response += "mm&";
-  dtostrf(CG_trans_saved, 5, 1, buff);
-  response += buff;
-  response += "mm&";
-  response += model.targetCGmin;
-  response += "&";
-  response += model.targetCGmax;
-  response += "&";
-  response += model.mechanicsType;
-  response += "&";
-  response += enableUpdate;
-  response += "&";
-  response += enableOTA;
-  server.send(200, "text/html", response);
-}
-
-
-// send available WiFi networks to client
-void getWiFiNetworks() {
-  bool ssidSTAavailable = false;
-  String response = "";
-  int n = WiFi.scanNetworks();
-
-  if (n > 0) {
-    for (int i = 0; i < n; ++i) {
-      response += WiFi.SSID(i);
-      if (WiFi.SSID(i) == ssid_STA) ssidSTAavailable = true;
-      if (i < n - 1) response += "&";
-    }
-    if (!ssidSTAavailable) {
-      response += "&";
-      response += ssid_STA;
-    }
-  }
-  server.send(200, "text/html", response);
-}
-
-
-// save parameters
-void saveParameter() {
-  if (server.hasArg("nLoadcells")) nLoadcells = server.arg("nLoadcells").toInt();
-  if (server.hasArg("distanceX1")) model.distance[X1] = server.arg("distanceX1").toFloat();
-  if (server.hasArg("distanceX2")) model.distance[X2] = server.arg("distanceX2").toFloat();
-  if (server.hasArg("distanceX3")) model.distance[X3] = server.arg("distanceX3").toFloat();
-  if (server.hasArg("refWeight")) refWeight = server.arg("refWeight").toFloat();
-  if (server.hasArg("refCG")) refCG = server.arg("refCG").toFloat();
-  if (server.hasArg("calFactorLoadcell1")) calFactorLoadcell[LC1] = server.arg("calFactorLoadcell1").toFloat();
-  if (server.hasArg("calFactorLoadcell2")) calFactorLoadcell[LC2] = server.arg("calFactorLoadcell2").toFloat();
-  if (server.hasArg("calFactorLoadcell3")) calFactorLoadcell[LC3] = server.arg("calFactorLoadcell3").toFloat();
-  if (server.hasArg("resistorR1")) resistor[R1] = server.arg("resistorR1").toFloat();
-  if (server.hasArg("resistorR2")) resistor[R2] = server.arg("resistorR2").toFloat();
-  if (server.hasArg("batType")) batType = server.arg("batType").toInt();
-  if (server.hasArg("batCells")) batCells = server.arg("batCells").toInt();
-  if (server.hasArg("ssid_STA")) server.arg("ssid_STA").toCharArray(ssid_STA, MAX_SSID_PW_LENGHT + 1);
-  if (server.hasArg("password_STA")) server.arg("password_STA").toCharArray(password_STA, MAX_SSID_PW_LENGHT + 1);
-  if (server.hasArg("ssid_AP")) server.arg("ssid_AP").toCharArray(ssid_AP, MAX_SSID_PW_LENGHT + 1);
-  if (server.hasArg("password_AP")) server.arg("password_AP").toCharArray(password_AP, MAX_SSID_PW_LENGHT + 1);
-  if (server.hasArg("mechanicsType")) model.mechanicsType = server.arg("mechanicsType").toInt();
-  if (server.hasArg("enableUpdate")) enableUpdate = server.arg("enableUpdate").toInt();
-  if (server.hasArg("enableOTA")) enableOTA = server.arg("enableOTA").toInt();
-
-  EEPROM.put(P_NUMBER_LOADCELLS, nLoadcells);
-  for (int i = LC1; i <= LC3; i++) {
-    EEPROM.put(P_DISTANCE_X1 + (i * sizeof(float)), model.distance[i]);
-    saveCalFactor(i);
-  }
-  EEPROM.put(P_REF_WEIGHT, refWeight);
-  EEPROM.put(P_REF_CG, refCG);
-  for (int i = R1; i <= R2; i++) {
-    EEPROM.put(P_RESISTOR_R1 + (i * sizeof(float)), resistor[i]);
-  }
-  EEPROM.put(P_BAT_TYPE, batType);
-  EEPROM.put(P_BATT_CELLS, batCells);
-  EEPROM.put(P_SSID_STA, ssid_STA);
-  EEPROM.put(P_PASSWORD_STA, password_STA);
-  EEPROM.put(P_SSID_AP, ssid_AP);
-  EEPROM.put(P_PASSWORD_AP, password_AP);
-  EEPROM.put(P_ENABLE_UPDATE, enableUpdate);
-  EEPROM.put(P_ENABLE_OTA, enableOTA);
-  EEPROM.commit();
-
-  if (model.name != "") {
-    saveModelJson(model.name);
-  }
-
-  server.send(200, "text/plain", "saved");
-}
-
-
-// calibrate cg scale
-void autoCalibrate() {
-  while (!runAutoCalibrate());
-  server.send(200, "text/plain", "Calibration successful");
-}
-
-
-// tare cg scale
-void runTare() {
-  tareLoadcells();
-  if (!getLoadcellError()) {
-    server.send(200, "text/plain", "Tare completed");
-    return;
-  }
-  server.send(404, "text/plain", "404: Tare failed !");
-}
-
-
-// save model
-void saveModel() {
-  if (server.hasArg("modelname")) {
-    if (server.hasArg("targetCGmin")) model.targetCGmin = server.arg("targetCGmin").toFloat();
-    if (server.hasArg("targetCGmax")) model.targetCGmax = server.arg("targetCGmax").toFloat();
-    if (server.hasArg("distanceX1")) model.distance[X1] = server.arg("distanceX1").toFloat();
-    if (server.hasArg("distanceX2")) model.distance[X2] = server.arg("distanceX2").toFloat();
-    if (server.hasArg("distanceX3")) model.distance[X3] = server.arg("distanceX3").toFloat();
-    if (server.hasArg("mechanicsType")) model.mechanicsType = server.arg("mechanicsType").toInt();
-    if (saveModelJson(server.arg("modelname"))) {
-      server.send(200, "text/plain", "saved");
-      return;
-    }
-  }
-  server.send(404, "text/plain", "404: Save model failed !");
-}
-
-
-// open model
-void openModel() {
-  if (server.hasArg("modelname")) {
-    if (openModelJson(server.arg("modelname"))) {
-      server.send(200, "text/plain", "opened");
-      return;
-    }
-  }
-  server.send(404, "text/plain", "404: Open model failed !");
-}
-
-
-// delete model
-void deleteModel() {
-  if (server.hasArg("modelname")) {
-    if (deleteModelJson(server.arg("modelname"))) {
-      server.send(200, "text/plain", "deleted");
-      return;
-    }
-  }
-  server.send(404, "text/plain", "404: Delete model failed !");
-}
-
-
-// convert the file extension to the MIME type
-String getContentType(String filename) {
-  if (filename.endsWith(".html")) return "text/html";
-  else if (filename.endsWith(".png")) return "text/css";
-  else if (filename.endsWith(".css")) return "text/css";
-  else if (filename.endsWith(".js")) return "application/javascript";
-  else if (filename.endsWith(".map")) return "application/json";
-  else if (filename.endsWith(".ico")) return "image/x-icon";
-  else if (filename.endsWith(".gz")) return "application/x-gzip";
-  return "text/plain";
-}
-
-
-// send file to the client (if it exists)
-bool handleFileRead(String path) {
-  // If a folder is requested, send the index file
-  if (path.endsWith("/")) path += "index.html";
-  String contentType = getContentType(path);
-  String pathWithGz = path + ".gz";
-
-  // If the file exists, either as a compressed archive, or normal
-  if (SPIFFS.exists(pathWithGz) || SPIFFS.exists(path)) {
-    if (SPIFFS.exists(pathWithGz))
-      path += ".gz";
-    File file = SPIFFS.open(path, "r");
-    size_t sent = server.streamFile(file, contentType);
-    file.close();
-    return true;
-  }
-
-  return false;
-}
-
-
-// upload a new file to the SPIFFS
-void handleFileUpload() {
-
-  HTTPUpload& upload = server.upload();
-
-  if (upload.status == UPLOAD_FILE_START) {
-    String filename = upload.filename;
-    if (!filename.startsWith("/")) filename = "/" + filename;
-    if (filename != MODEL_FILE ) server.send(500, "text/plain", "wrong file !");
-    // Open the file for writing in SPIFFS (create if it doesn't exist)
-    fsUploadFile = SPIFFS.open(filename, "w");
-    filename = String();
-  } else if (upload.status == UPLOAD_FILE_WRITE) {
-    // Write the received bytes to the file
-    fsUploadFile.write(upload.buf, upload.currentSize);
-  } else if (upload.status == UPLOAD_FILE_END) {
-    // If the file was successfully created
-    if (fsUploadFile) {
-      fsUploadFile.close();
-      // Redirect the client to the success page
-      server.sendHeader("Location", "/settings.html");
-      server.send(303);
-    } else {
-      server.send(500, "text/plain", "500: couldn't create file");
-    }
-  }
-
-}
-
-
-// save model to json file
-bool saveModelJson(String modelName) {
-
-  if (modelName.length() > MAX_MODELNAME_LENGHT) {
-    return false;
-  }
-
-  StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
-
-  if (SPIFFS.exists(MODEL_FILE)) {
-    // read json file
-    File f = SPIFFS.open(MODEL_FILE, "r");
-    auto error = deserializeJson(jsonDoc, f);
-    f.close();
-    if (error) {
-      return false;
-    }
-    // check if model exists
-    if (jsonDoc.containsKey(modelName)) {
-      writeModelData(jsonDoc[modelName]);
-    } else {
-      // otherwise create new
-      writeModelData(jsonDoc.createNestedObject(modelName));
-    }
-    // write to file
-    if (!error) {
-      f = SPIFFS.open(MODEL_FILE, "w");
-      serializeJson(jsonDoc, f);
-      f.close();
-    } else {
-      return false;
-    }
-  } else {
-    // creat new json
-    writeModelData(jsonDoc.createNestedObject(modelName));
-    // write to file
-    if (!jsonDoc.isNull()) {
-      File f = SPIFFS.open(MODEL_FILE, "w");
-      serializeJson(jsonDoc, f);
-      f.close();
-    } else {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-
-// read model data from json file
-bool openModelJson(String modelName) {
-
-  StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
-
-  if (SPIFFS.exists(MODEL_FILE)) {
-    // read json file
-    File f = SPIFFS.open(MODEL_FILE, "r");
-    auto error = deserializeJson(jsonDoc, f);
-    f.close();
-    if (error) {
-      return false;
-    }
-    // check if model exists
-    if (jsonDoc.containsKey(modelName)) {
-      // load parameters from model
-      model.distance[X1] = jsonDoc[modelName]["x1"];
-      model.distance[X2] = jsonDoc[modelName]["x2"];
-      model.distance[X3] = jsonDoc[modelName]["x3"];
-      model.targetCGmin = jsonDoc[modelName]["cgmin"];
-      model.targetCGmax = jsonDoc[modelName]["cgmax"];
-      model.mechanicsType = jsonDoc[modelName]["mType"];
-    } else {
-      return false;
-    }
-
-    // save current model name to eeprom
-    modelName.toCharArray(model.name, MAX_MODELNAME_LENGHT + 1);
-    EEPROM.put(P_MODELNAME, model.name);
-    EEPROM.commit();
-
-    return true;
-  }
-
-  return false;
-}
-
-
-// delete model from json file
-bool deleteModelJson(String modelName) {
-
-  StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
-
-  if (SPIFFS.exists(MODEL_FILE)) {
-    // read json file
-    File f = SPIFFS.open(MODEL_FILE, "r");
-    auto error = deserializeJson(jsonDoc, f);
-    f.close();
-    if (error) {
-      return false;
-    }
-    // check if model exists
-    if (jsonDoc.containsKey(modelName)) {
-      jsonDoc.remove(modelName);
-    } else {
-      return false;
-    }
-    // if no models in json, kill it
-    if (jsonDoc.size() == 0) {
-      SPIFFS.remove(MODEL_FILE);
-    } else {
-      // write to file
-      if (!jsonDoc.isNull()) {
-        File f = SPIFFS.open(MODEL_FILE, "w");
-        serializeJson(jsonDoc, f);
-        f.close();
-      } else {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  return false;
-
-}
-
-void writeModelData(JsonObject object) {
-  char buff[8];
-  String stringBuff;
-
-  dtostrf(weightTotal, 5, 1, buff);
-  stringBuff = buff;
-  stringBuff.trim();
-  object["wt"] = stringBuff;
-  dtostrf(CG_length, 5, 1, buff);
-  stringBuff = buff;
-  stringBuff.trim();
-  object["cg"] = stringBuff;
-  dtostrf(CG_trans, 5, 1, buff);
-  stringBuff = buff;
-  stringBuff.trim();
-  object["cglr"] = stringBuff;
-  object["x1"] = model.distance[X1];
-  object["x2"] = model.distance[X2];
-  object["x3"] = model.distance[X3];
-  object["cgmin"] = model.targetCGmin;
-  object["cgmax"] = model.targetCGmax;
-  object["mType"] = model.mechanicsType;
-}
-
-
-// print update progress screen
-void printUpdateProgress(unsigned int progress, unsigned int total) {
-  printConsole(T_UPDATE, updateMsg);
-
-  oledDisplay.firstPage();
-  do {
-    oledDisplay.setFont(oledFontSmall);
-    oledDisplay.setCursor(0, 12);
-    oledDisplay.print(updateMsg);
-
-    oledDisplay.setCursor(107, 35);
-    oledDisplay.printf("%u%%\r", (progress / (total / 100)));
-
-    oledDisplay.drawFrame(0, 40, 128, 10);
-    oledDisplay.drawBox(0, 40, (progress / (total / 128)), 10);
-
-  } while ( oledDisplay.nextPage() );
-}
-
-
-// convert time to string
-char * TimeToString(unsigned long t)
-{
-  static char str[13];
-  int h = t / 3600000;
-  t = t % 3600000;
-  int m = t / 60000;
-  t = t % 60000;
-  int s = t / 1000;
-  int ms = t - (s * 1000);
-  sprintf(str, "%02ld:%02d:%02d.%03d", h, m, s, ms);
-  return str;
-}
-
-void printConsole(int t, String msg) {
-  Serial.print(TimeToString(millis()));
-  Serial.print(" [");
-  switch (t) {
-    case T_BOOT:
-      Serial.print("BOOT");
-      break;
-    case T_RUN:
-      Serial.print("RUN");
-      break;
-    case T_ERROR:
-      Serial.print("ERROR");
-      break;
-    case T_WIFI:
-      Serial.print("WIFI");
-      break;
-    case T_UPDATE:
-      Serial.print("UPDATE");
-      break;
-    case T_HTTPS:
-      Serial.print("HTTPS");
-      break;
-  }
-  Serial.print("] ");
-  Serial.println(msg);
-}
-
-
-// https update
-bool httpsUpdate(uint8_t command) {
-  if (!httpsClient.connect(HOST, HTTPS_PORT)) {
-    printConsole(T_ERROR, "Wifi: connection to GIT failed");
-    return false;
-  }
-
-  const char * headerKeys[] = {"Location"} ;
-  const size_t numberOfHeaders = 1;
-
-  HTTPClient https;
-  https.setUserAgent("cgscale");
-  https.setRedirectLimit(0);
-  https.setFollowRedirects(true);
-
-  String url = "https://" + String(HOST) + String(URL);
-  if (https.begin(httpsClient, url)) {
-    https.collectHeaders(headerKeys, numberOfHeaders);
-
-    printConsole(T_HTTPS, "GET: " + url);
-    int httpCode = https.GET();
-    if (httpCode > 0) {
-      // response
-      if (httpCode == HTTP_CODE_FOUND) {
-        String newUrl = https.header("Location");
-        gitVersion = newUrl.substring(newUrl.lastIndexOf('/') + 2).toFloat();
-        if (gitVersion > String(CGSCALE_VERSION).toFloat()) {
-          printConsole(T_UPDATE, "Firmware update available: V" + String(gitVersion));
-        } else {
-          printConsole(T_UPDATE, "Firmware version found on GitHub: V" + String(gitVersion) + " - current firmware is up to date");
-        }
-      } else if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-        Serial.println(https.getString());
-      } else {
-        printConsole(T_ERROR, "HTTPS: GET... failed, " + https.errorToString(httpCode));
-        https.end();
-        return false;
-      }
-    } else {
-      return false;
-    }
-    https.end();
-  } else {
-    printConsole(T_ERROR, "Wifi: Unable to connect");
-    return false;
-  }
-
-  return true;
-}
-
-#endif

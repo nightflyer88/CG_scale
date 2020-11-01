@@ -163,5 +163,11 @@ const char ip[4] =                  {1,2,3,4};    // default IP address
 
 
 
+// **** virtual weight settings ****
+
+#define MAX_VIRTUAL_WEIGHT              10               
+
+
+
 // **** end of settings ****
 #warning ESP8266 settings have been loaded
