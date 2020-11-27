@@ -4,11 +4,12 @@
                       (c) 2019-2020 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "2.2"
+#define CGSCALE_VERSION "2.21"
 /*
 
   ******************************************************************
   history:
+  V2.21   27.11.20     bug fixed: recompiled, binary file incorrect
   V2.2    01.11.20     Virtual weights built in
   V2.12   07.10.20     bug fixed: LR value was displayed in the wrong display position
                        Voltage for specified battery types deleted
