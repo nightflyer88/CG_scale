@@ -4,11 +4,12 @@
                       (c) 2019-2020 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "2.21"
+#define CGSCALE_VERSION "2.22"
 /*
 
   ******************************************************************
   history:
+  V2.22   28.11.20     fixed RAM problems with JSON
   V2.21   27.11.20     bug fixed: recompiled, binary file incorrect
   V2.2    01.11.20     Virtual weights built in
   V2.12   07.10.20     bug fixed: LR value was displayed in the wrong display position
@@ -583,7 +584,7 @@ bool saveModelJson(String modelName) {
     return false;
   }
 
-  StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+  DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
 
   if (SPIFFS.exists(MODEL_FILE)) {
     // read json file
@@ -591,6 +592,7 @@ bool saveModelJson(String modelName) {
     auto error = deserializeJson(jsonDoc, f);
     f.close();
     if (error) {
+      printConsole(T_ERROR, "save JSON: " + String(error.c_str()));
       return false;
     }
     // check if model exists
@@ -606,6 +608,7 @@ bool saveModelJson(String modelName) {
       serializeJson(jsonDoc, f);
       f.close();
     } else {
+      printConsole(T_ERROR, "save JSON: " + String(error.c_str()));
       return false;
     }
   } else {
@@ -617,6 +620,7 @@ bool saveModelJson(String modelName) {
       serializeJson(jsonDoc, f);
       f.close();
     } else {
+      printConsole(T_ERROR, "JSON is null ");
       return false;
     }
   }
@@ -628,7 +632,7 @@ bool saveModelJson(String modelName) {
 // read model data from json file
 bool openModelJson(String modelName) {
 
-  StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+  DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
 
   if (SPIFFS.exists(MODEL_FILE)) {
     // read json file
@@ -636,6 +640,7 @@ bool openModelJson(String modelName) {
     auto error = deserializeJson(jsonDoc, f);
     f.close();
     if (error) {
+      printConsole(T_ERROR, "open JSON: " + String(error.c_str()));
       return false;
     }
     // check if model exists
@@ -658,6 +663,7 @@ bool openModelJson(String modelName) {
         }
       }
     } else {
+      printConsole(T_ERROR, "Model name not found");
       return false;
     }
 
@@ -669,6 +675,7 @@ bool openModelJson(String modelName) {
     return true;
   }
 
+  printConsole(T_ERROR, "Modelfile not exists");
   return false;
 }
 
@@ -676,7 +683,7 @@ bool openModelJson(String modelName) {
 // delete model from json file
 bool deleteModelJson(String modelName) {
 
-  StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+  DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
 
   if (SPIFFS.exists(MODEL_FILE)) {
     // read json file
@@ -684,12 +691,14 @@ bool deleteModelJson(String modelName) {
     auto error = deserializeJson(jsonDoc, f);
     f.close();
     if (error) {
+      printConsole(T_ERROR, "delete JSON: " + String(error.c_str()));
       return false;
     }
     // check if model exists
     if (jsonDoc.containsKey(modelName)) {
       jsonDoc.remove(modelName);
     } else {
+      printConsole(T_ERROR, "Model name not found");
       return false;
     }
     // if no models in json, kill it
@@ -702,14 +711,15 @@ bool deleteModelJson(String modelName) {
         serializeJson(jsonDoc, f);
         f.close();
       } else {
+        printConsole(T_ERROR, "JSON is null ");
         return false;
       }
     }
     return true;
   }
 
+  printConsole(T_ERROR, "Modelfile not exists");
   return false;
-
 }
 
 
@@ -790,7 +800,8 @@ void getParameter() {
   model.targetCGmin = 0;
   model.targetCGmax = 0;
 
-  StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+  //StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+  DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
 
   if (SPIFFS.exists(MODEL_FILE)) {
     // read json file
@@ -866,7 +877,8 @@ void getParameter() {
 // send virtual weights to client
 void getVirtualWeight() {
   String response = "";
-  StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+  //StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+  DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
 
   JsonArray virtw = jsonDoc.createNestedArray("virtual");
   for (int i=0; i < MAX_VIRTUAL_WEIGHT; i++){
@@ -982,7 +994,8 @@ void saveModel() {
     if (server.hasArg("distanceX3")) model.distance[X3] = server.arg("distanceX3").toFloat();
     if (server.hasArg("mechanicsType")) model.mechanicsType = server.arg("mechanicsType").toInt();
     if(server.hasArg("virtualWeight")){    
-      StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+      //StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+      DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
       String json = server.arg("virtualWeight");
       json.replace("%22", "\"");
       deserializeJson(jsonDoc, json);
@@ -1295,7 +1308,6 @@ void setup() {
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.print(".");
     if (WiFi.status() == WL_NO_SSID_AVAIL) {
       printConsole(T_ERROR, "\nWifi: No SSID available");
       break;
@@ -1333,7 +1345,7 @@ void setup() {
     printConsole(T_ERROR, "Wifi: " + hostname);
   } else {
     hostname += ".local";
-    printConsole(T_RUN, "Wifi: " + hostname);
+    printConsole(T_RUN, "Wifi hostname: " + hostname);
   }
 #endif
 
@@ -1662,7 +1674,7 @@ void loop() {
       switch (menuPage)
       {
         case MENU_HOME: {
-            Serial.print(F("\n\n********************************************\nCG scale by M.Lehmann et al. - V"));
+            Serial.print(F("\n\n********************************************\nCG scale by M.Lehmann - V"));
             Serial.print(CGSCALE_VERSION);
             Serial.print(F("\n\n"));
 
