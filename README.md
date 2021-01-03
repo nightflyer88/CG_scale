@@ -1,7 +1,8 @@
 # CG scale
 
-[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=R69PMKTCXQBUU&source=url)
+Die CG Scale-Firmware ist Quelloffen und kostenlos erhältlich. Wenn es Ihnen gefällt, unterstützen Sie das Projekt mit einer Spende und helfen Sie mit, dass es kontinuierlich weiterentwickelt wird.
 
+[![Donate](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/Paypal.png)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=R69PMKTCXQBUU&source=url)
 
 Schwerpunktwaage auf Arduinobasis zum auswiegen von Flugmodellen. Es werden relativ wenige Bauteile benötigt, und sollte auch von Elektronikanfänger problemlos nachgebaut werden können.
 Die wichtigsten Funktionen:
@@ -23,3 +24,5 @@ Weiter infos zum Aufbau findet man im [Wiki](https://github.com/nightflyer88/CG_
 ![cgscale_home](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/cgscale_home.png)
 ![cgscale_models](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/cgscale_models.png)
 ![cgscale_settings](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/cgscale_settings.png)
+![cgscale_models](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/CG_Scale_wood.jpeg)
+![cgscale_models](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/CG_Scale_ASW20.jpeg)
