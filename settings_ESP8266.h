@@ -84,6 +84,9 @@ CG scale with 3 Loadcells:
 U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ D3, /* data=*/ D4);
 //U8G2_SSD1306_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ D3, /* data=*/ D4);
 
+#define DISPLAY_WIDTH                 128
+#define DISPLAY_HIGHT                 64
+
 
 // **** Voltage measurement settings ****
 

@@ -53,11 +53,10 @@ CG scale with 3 Loadcells:
 #define PIN_LOADCELL1_PD_SCK          D7
 
 #define PIN_LOADCELL2_DOUT            D3
-
 #define PIN_LOADCELL2_PD_SCK          D8
   
-#define PIN_LOADCELL3_DOUT            D0
-#define PIN_LOADCELL3_PD_SCK          D0
+#define PIN_LOADCELL3_DOUT            D3
+#define PIN_LOADCELL3_PD_SCK          D8
 
 // D3 can be used in parallel to the load cell with Wifi Kit 8
 #define PIN_TARE_BUTTON               D3
@@ -90,6 +89,8 @@ CG scale with 3 Loadcells:
 // Wifi Kit 8 has a fixed wired 128x32 display
 U8G2_SSD1306_128X32_UNIVISION_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ 16, /* clock=*/ 5, /* data=*/ 4);
 
+#define DISPLAY_WIDTH                 128
+#define DISPLAY_HIGHT                 32
 
 // **** Voltage measurement settings ****
 

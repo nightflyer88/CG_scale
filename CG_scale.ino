@@ -4,11 +4,12 @@
                       (c) 2019-2020 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "2.22"
+#define CGSCALE_VERSION "2.3"
 /*
 
   ******************************************************************
   history:
+  V2.3    01.03.22     Up to three ESPs can be linked via WLAN. Useful for landing gear scales on engine models
   V2.22   28.11.20     fixed RAM problems with JSON
   V2.21   27.11.20     bug fixed: recompiled, binary file incorrect
   V2.2    01.11.20     Virtual weights built in
@@ -106,7 +107,7 @@
 
 // load settings
 #if defined(__AVR__)
-#include "settings_AVR.h"
+  #include "settings_AVR.h"
 #elif defined(ESP8266)
   #ifdef WIFI_KIT_8
     #include "settings_WIFI_KIT_8.h"
@@ -157,10 +158,12 @@ uint8_t batCells = BAT_CELLS;
 float refWeight = REF_WEIGHT;
 float refCG = REF_CG;
 #if defined(ESP8266)
+char device_Name[MAX_SSID_PW_LENGHT + 1] = SSID_AP;
 char ssid_STA[MAX_SSID_PW_LENGHT + 1] = SSID_STA;
 char password_STA[MAX_SSID_PW_LENGHT + 1] = PASSWORD_STA;
 char ssid_AP[MAX_SSID_PW_LENGHT + 1] = SSID_AP;
 char password_AP[MAX_SSID_PW_LENGHT + 1] = PASSWORD_AP;
+char loadCellURL[3][MAX_SSID_PW_LENGHT + 1] = {"","",""};
 bool enableUpdate = ENABLE_UPDATE;
 bool enableOTA = ENABLE_OTA;
 #endif
@@ -178,17 +181,16 @@ bool updateMenu = true;
 int menuPage = 0;
 String errMsg[5];
 int errMsgCnt = 0;
-int oledDisplayHeight;
-int oledDisplayWidth;
+const uint8_t *oledFontBig;
 const uint8_t *oledFontLarge;
 const uint8_t *oledFontNormal;
 const uint8_t *oledFontSmall;
-const uint8_t *oledFontTiny;
 #if defined(ESP8266)
 String updateMsg = "";
 bool wifiSTAmode = true;
 float gitVersion = -1;
 #endif
+
 
 
 // Restart CPU
@@ -282,63 +284,60 @@ void printConsole(int t, String msg) {
 
 void initOLED() {
   oledDisplay.begin();
-  oledDisplayHeight = oledDisplay.getDisplayHeight();
-  oledDisplayWidth = oledDisplay.getDisplayWidth();
-  printConsole(T_BOOT, "init OLED display: " + String(oledDisplayWidth) + String("x") + String(oledDisplayHeight));
+  printConsole(T_BOOT, "init OLED display: " + String(DISPLAY_WIDTH) + String("x") + String(DISPLAY_HIGHT));
 
-
+#if DISPLAY_HIGHT > 32
+  oledFontBig    = u8g2_font_helvR18_tn;
   oledFontLarge  = u8g2_font_helvR12_tr;
   oledFontNormal = u8g2_font_helvR10_tr;
   oledFontSmall  = u8g2_font_5x7_tr;
-  oledFontTiny   = u8g2_font_4x6_tr;
+#elif DISPLAY_HIGHT <= 32
+  oledFontBig    = u8g2_font_helvR14_tr;
+  oledFontLarge  = u8g2_font_helvR10_tr;
+  oledFontNormal = u8g2_font_6x12_tr;
+  oledFontSmall  = u8g2_font_5x7_tr;
+#endif
 
-  if (oledDisplayHeight <= 32) {
-    oledFontLarge  = u8g2_font_helvR10_tr;
-    oledFontNormal = u8g2_font_6x12_tr;
-  }
-  int ylineHeight = oledDisplayHeight / 3;
-
-  oledDisplay.setFont(oledFontNormal);
+  int ylineHeight = DISPLAY_HIGHT / 3;
 
   oledDisplay.firstPage();
   do {
     oledDisplay.setFont(oledFontLarge);
-    if (oledDisplayHeight <= 32) {
-      oledDisplay.drawXBMP(5, 0, 18, 18, CGImage);
-    } else {
-      oledDisplay.drawXBMP(20, 12, 18, 18, CGImage);
-    }
+#if DISPLAY_HIGHT <= 32
+    oledDisplay.drawXBMP(5, 0, 18, 18, CGImage);
+#else
+    oledDisplay.drawXBMP(20, 12, 18, 18, CGImage);
+#endif
     oledDisplay.setFont(oledFontLarge);
 
-    if (oledDisplayHeight <= 32) {
-      oledDisplay.setCursor(30, 12);
-    } else {
-      oledDisplay.setCursor(45, 28);
-    }
+#if DISPLAY_HIGHT <= 32
+    oledDisplay.setCursor(30, 12);
+#else
+    oledDisplay.setCursor(45, 28);
+#endif
     oledDisplay.print(F("CG scale"));
 
     oledDisplay.setFont(oledFontSmall);
-    if (oledDisplayHeight <= 32) {
-      oledDisplay.setCursor(30, 22);
-    } else {
-      oledDisplay.setCursor(35, 55);
-    }
+#if DISPLAY_HIGHT <= 32
+    oledDisplay.setCursor(30, 22);
+#else
+    oledDisplay.setCursor(35, 55);
+#endif
     oledDisplay.print(F("Version: "));
     oledDisplay.print(CGSCALE_VERSION);
-    if (oledDisplayHeight <= 32) {
-      oledDisplay.setCursor(5, 31);
-    } else {
-      oledDisplay.setCursor(20, 64);
-    }
+#if DISPLAY_HIGHT <= 32
+    oledDisplay.setCursor(5, 31);
+#else
+    oledDisplay.setCursor(20, 64);
+#endif
     oledDisplay.print(F("(c) 2020 M.Lehmann"));
 
   } while ( oledDisplay.nextPage() );
 }
 
-//void printOLED(String aLine1, String aLine2, String aLine3 = String(""));
 
 void printOLED(String aLine1, String aLine2, String aLine3) {
-  int ylineHeight = oledDisplayHeight / 3;
+  int ylineHeight = DISPLAY_HIGHT / 3;
 
   oledDisplay.firstPage();
   do {
@@ -347,7 +346,7 @@ void printOLED(String aLine1, String aLine2, String aLine3) {
     oledDisplay.print(aLine1);
     oledDisplay.setCursor(0, ylineHeight * 2);
     oledDisplay.print(aLine2);
-    oledDisplay.setCursor(0, oledDisplayHeight);
+    oledDisplay.setCursor(0, DISPLAY_HIGHT);
     oledDisplay.print(aLine3);
   } while ( oledDisplay.nextPage() );
 }
@@ -387,46 +386,80 @@ void printScaleOLED() {
           oledDisplay.print(F("%"));
         }
       }
- 
-      // print total weight
-      oledDisplay.setFont(oledFontNormal);
-      dtostrf(weightTotal, 5, 1, buff);
-      if (oledDisplayHeight <= 32) {
-        oledDisplay.setCursor(1, 18);
-        oledDisplay.print(F("M  = "));
-      } else {
-        oledDisplay.drawXBMP(2, pos_weightTotal, 18, 18, weightImage);
-        oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), pos_weightTotal + 17);
-      }
-      oledDisplay.print(buff);
-      oledDisplay.print(F(" g"));
 
-      // print CG longitudinal axis
-      dtostrf(CG_length, 5, 1, buff);
-      if (oledDisplayHeight <= 32) {
-        oledDisplay.setCursor(1, 32);
-        oledDisplay.print(F("CG = "));
-      } else {
-        oledDisplay.drawXBMP(2, pos_CG_length, 18, 18, CGImage);
-        oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), pos_CG_length + 16);
-      }
-      oledDisplay.print(buff);
-      oledDisplay.print(F(" mm"));
-
-      // print CG transverse axis
-      if (nLoadcells == 3) {
-        if (oledDisplayHeight <= 32) {
+#if defined(ESP8266)
+      if (DISPLAY_HIGHT <= 32 && (strlen(loadCellURL[LC1]) || strlen(loadCellURL[LC2]) || strlen(loadCellURL[LC3]))) {
+        oledDisplay.setFont(oledFontBig);
+        float weight = 0;
+        for (int i = LC1; i <= LC3; i++) {
+          if (i < nLoadcells) {
+            if(strlen(loadCellURL[i]) == 0){
+              weight = weightLoadCell[i];
+            } 
+          }
+        }
+        dtostrf(weight, 5, 1, buff);
+        oledDisplay.setCursor(80 - oledDisplay.getStrWidth(buff), 28);
+        oledDisplay.print(buff);
+        oledDisplay.print(F(" g"));
+      }else{
+#endif
+        // print total weight
+        if (nLoadcells == 1 ) {
+          oledDisplay.setFont(oledFontBig);
+          dtostrf(weightTotal, 5, 1, buff);
+#if DISPLAY_HIGHT <= 32
+          oledDisplay.setCursor(80 - oledDisplay.getStrWidth(buff), 28);
+#else
+          oledDisplay.drawXBMP(2, pos_weightTotal, 18, 18, weightImage);
+          oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), pos_weightTotal + 17);
+#endif
+          oledDisplay.print(buff);
+          oledDisplay.print(F(" g"));
+          
+        }else{
+          oledDisplay.setFont(oledFontNormal);
+          dtostrf(weightTotal, 5, 1, buff);
+#if DISPLAY_HIGHT <= 32
+          oledDisplay.setCursor(1, 18);
+          oledDisplay.print(F("M  = "));
+#else
+          oledDisplay.drawXBMP(2, pos_weightTotal, 18, 18, weightImage);
+          oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), pos_weightTotal + 17);
+#endif
+          oledDisplay.print(buff);
+          oledDisplay.print(F(" g"));
+    
+          // print CG longitudinal axis
+          dtostrf(CG_length, 5, 1, buff);
+#if DISPLAY_HIGHT <= 32
+          oledDisplay.setCursor(1, 32);
+          oledDisplay.print(F("CG = "));
+#else
+          oledDisplay.drawXBMP(2, pos_CG_length, 18, 18, CGImage);
+          oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), pos_CG_length + 16);
+#endif
+          oledDisplay.print(buff);
+          oledDisplay.print(F(" mm"));
+        }
+  
+        // print CG transverse axis
+        if (nLoadcells == 3 ) {
+#if DISPLAY_HIGHT <= 32
           oledDisplay.setCursor(78, 32);
           oledDisplay.print(F("LR="));
           dtostrf(CG_trans, 3, 0, buff);
-        } else {
+#else
           dtostrf(CG_trans, 5, 1, buff);
           oledDisplay.drawXBMP(2, 47, 18, 18, CGtransImage);
           oledDisplay.setCursor(93 - oledDisplay.getStrWidth(buff), 64);
+#endif
+          oledDisplay.print(buff);
+          oledDisplay.print(F(" mm"));
         }
-        oledDisplay.print(buff);
-        oledDisplay.print(F(" mm"));
+#if defined(ESP8266)
       }
+#endif
     } else {
       oledDisplay.setFont(oledFontSmall);
       for (int i = 1; i <= errMsgCnt; i++) {
@@ -434,7 +467,6 @@ void printScaleOLED() {
         oledDisplay.print(errMsg[i]);
       }
     }
-
   } while ( oledDisplay.nextPage() );
 }
 
@@ -450,7 +482,7 @@ void handleTareBtn() {
     } else {
       tareBtnCnt++;
       if (tareBtnCnt > 10) {
-        printOLED("TARE ==>", "  tare load cells ...");
+        printOLED("TARE ==>", "  tare load cells ...","");
         // avoid keybounce
         tareBtnCnt = -1000;
         tareLoadcells();
@@ -483,7 +515,13 @@ void updateLoadcells() {
 void tareLoadcells() {
   for (int i = LC1; i <= LC3; i++) {
     if (i < nLoadcells) {
+#if defined(ESP8266)
+      if(strlen(loadCellURL[i]) == 0){
+        LoadCell[i].tare();
+      }
+#else
       LoadCell[i].tare();
+#endif
     }
   }
 }
@@ -800,7 +838,6 @@ void getParameter() {
   model.targetCGmin = 0;
   model.targetCGmax = 0;
 
-  //StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
   DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
 
   if (SPIFFS.exists(MODEL_FILE)) {
@@ -870,6 +907,12 @@ void getParameter() {
   response += enableUpdate;
   response += "&";
   response += enableOTA;
+  response += "&";
+  response += device_Name;
+  for (int i = LC1; i <= LC3; i++) {
+    response += "&";
+    response += loadCellURL[LC1];
+  }
   server.send(200, "text/html", response);
 }
 
@@ -877,7 +920,7 @@ void getParameter() {
 // send virtual weights to client
 void getVirtualWeight() {
   String response = "";
-  //StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
+
   DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
 
   JsonArray virtw = jsonDoc.createNestedArray("virtual");
@@ -937,6 +980,10 @@ void saveParameter() {
   if (server.hasArg("mechanicsType")) model.mechanicsType = server.arg("mechanicsType").toInt();
   if (server.hasArg("enableUpdate")) enableUpdate = server.arg("enableUpdate").toInt();
   if (server.hasArg("enableOTA")) enableOTA = server.arg("enableOTA").toInt();
+  if (server.hasArg("device_Name")) server.arg("device_Name").toCharArray(device_Name, MAX_SSID_PW_LENGHT + 1);
+  if (server.hasArg("lc1_URL")) server.arg("lc1_URL").toCharArray(loadCellURL[LC1], MAX_SSID_PW_LENGHT + 1);
+  if (server.hasArg("lc2_URL")) server.arg("lc2_URL").toCharArray(loadCellURL[LC2], MAX_SSID_PW_LENGHT + 1);
+  if (server.hasArg("lc3_URL")) server.arg("lc3_URL").toCharArray(loadCellURL[LC3], MAX_SSID_PW_LENGHT + 1);
 
   EEPROM.put(P_NUMBER_LOADCELLS, nLoadcells);
   for (int i = LC1; i <= LC3; i++) {
@@ -956,6 +1003,10 @@ void saveParameter() {
   EEPROM.put(P_PASSWORD_AP, password_AP);
   EEPROM.put(P_ENABLE_UPDATE, enableUpdate);
   EEPROM.put(P_ENABLE_OTA, enableOTA);
+  EEPROM.put(P_DEVICENAME, device_Name);
+  EEPROM.put(P_LC1_URL, loadCellURL[LC1]);  
+  EEPROM.put(P_LC2_URL, loadCellURL[LC2]);  
+  EEPROM.put(P_LC3_URL, loadCellURL[LC3]);  
   EEPROM.commit();
 
   if (model.name != "") {
@@ -994,7 +1045,6 @@ void saveModel() {
     if (server.hasArg("distanceX3")) model.distance[X3] = server.arg("distanceX3").toFloat();
     if (server.hasArg("mechanicsType")) model.mechanicsType = server.arg("mechanicsType").toInt();
     if(server.hasArg("virtualWeight")){    
-      //StaticJsonDocument<JSONDOC_SIZE> jsonDoc;
       DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
       String json = server.arg("virtualWeight");
       json.replace("%22", "\"");
@@ -1177,6 +1227,24 @@ bool httpsUpdate(uint8_t command) {
   return true;
 }
 
+
+void waitWiFiconnected() {
+  long timeoutWiFi = millis();
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    if (WiFi.status() == WL_NO_SSID_AVAIL) {
+      printConsole(T_ERROR, "\nWifi: No SSID available");
+      break;
+    } else if (WiFi.status() == WL_CONNECT_FAILED) {
+      printConsole(T_ERROR, "\nWifi: Connection failed");
+      break;
+    } else if ((millis() - timeoutWiFi) > TIMEOUT_CONNECT) {
+      printConsole(T_ERROR, "\nWifi: Timeout");
+      break;
+    }
+  }
+}
+
 #endif
 
 
@@ -1262,6 +1330,24 @@ void setup() {
     EEPROM.get(P_ENABLE_OTA, enableOTA);
   }
 
+  if (EEPROM.read(P_DEVICENAME) != 0xFF) {
+    EEPROM.get(P_DEVICENAME, device_Name);
+  }else{
+    strcpy(device_Name, ssid_AP);
+  }
+
+  if (EEPROM.read(P_LC1_URL) != 0xFF) {
+    EEPROM.get(P_LC1_URL, loadCellURL[LC1]);
+  }
+
+  if (EEPROM.read(P_LC2_URL) != 0xFF) {
+    EEPROM.get(P_LC2_URL, loadCellURL[LC2]);
+  }
+
+  if (EEPROM.read(P_LC3_URL) != 0xFF) {
+    EEPROM.get(P_LC3_URL, loadCellURL[LC3]);
+  }
+
   // load current model
   printConsole(T_BOOT, "open last model");
   if (!openModelJson(model.name)) {
@@ -1291,7 +1377,6 @@ void setup() {
   }
 
   tareLoadcells();
-
   getLoadcellError();
 
 #if defined(ESP8266)
@@ -1303,9 +1388,14 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid_STA, password_STA);
 
+  waitWiFiconnected();
 
-  long timeoutWiFi = millis();
-
+  // in slave mode connect to AP network
+  if (nLoadcells == 1 && WiFi.status() != WL_CONNECTED) {
+    WiFi.begin(ssid_AP, password_AP);
+    waitWiFiconnected();
+  }
+  /*long timeoutWiFi = millis();
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     if (WiFi.status() == WL_NO_SSID_AVAIL) {
@@ -1318,7 +1408,7 @@ void setup() {
       printConsole(T_ERROR, "\nWifi: Timeout");
       break;
     }
-  }
+  }*/
 
 
   if (WiFi.status() != WL_CONNECTED) {
@@ -1337,7 +1427,7 @@ void setup() {
   // Set Hostname
   String hostname = "disabled";
 #if ENABLE_MDNS
-  hostname = ssid_AP;
+  hostname = device_Name;
   hostname.replace(" ", "");
   hostname.toLowerCase();
   if (!MDNS.begin(hostname, WiFi.localIP())) {
@@ -1474,13 +1564,71 @@ void loop() {
   if ((millis() - lastTimeLoadcell) > UPDATE_INTERVAL_LOADCELL) {
     lastTimeLoadcell = millis();
 
+    errMsgCnt = 0;
+    getLoadcellError();
+
+    // read battery voltage
+    if (batType > B_OFF) {
+      batVolt = (analogRead(VOLTAGE_PIN) / 1024.0) * V_REF * ((resistor[R1] + resistor[R2]) / resistor[R2]) / 1000.0;
+#if ENABLE_PERCENTLIST
+      if (batType > B_VOLT) {
+        batVolt = percentBat(batVolt / batCells);
+      }
+#endif
+    }
+
     // get Loadcell weights
     for (int i = LC1; i <= LC3; i++) {
       if (i < nLoadcells) {
-        weightLoadCell[i] = LoadCell[i].getData();
-        // IIR filter
-        weightLoadCell[i] = weightLoadCell[i] + SMOOTHING_LOADCELL * (lastWeightLoadCell[i] - weightLoadCell[i]);
-        lastWeightLoadCell[i] = weightLoadCell[i];
+#if defined(ESP8266)
+        if(strlen(loadCellURL[i]) == 0){
+#endif
+          // get local data
+          weightLoadCell[i] = LoadCell[i].getData();
+
+          // IIR filter
+          weightLoadCell[i] = weightLoadCell[i] + SMOOTHING_LOADCELL * (lastWeightLoadCell[i] - weightLoadCell[i]);
+          lastWeightLoadCell[i] = weightLoadCell[i];
+#if defined(ESP8266)
+        }else{
+          // get data from external server
+          WiFiClient client;
+          HTTPClient http;
+          
+          http.begin(client, "http://" + String(loadCellURL[i]) + "/getRawValue");
+          http.setTimeout(2000);
+          int httpCode = http.GET();
+
+          if (httpCode == HTTP_CODE_OK) {
+            const String& txt = http.getString();
+
+            // split response string
+            int delimiterStartIndex = 0;
+            int delimiterEndIndex = 0;
+            String subString[10];
+            int subStringCount = 0;
+            while(delimiterEndIndex > -1){
+              delimiterEndIndex = txt.indexOf('&',delimiterStartIndex);
+              subString[subStringCount] = txt.substring(delimiterStartIndex,delimiterEndIndex);
+              ++subStringCount;
+              delimiterStartIndex = delimiterEndIndex+1;
+            }
+
+            weightLoadCell[i] = subString[LC1].toFloat();
+
+            float extBatVolt = subString[3].toFloat();
+            if (batType > B_VOLT && batVolt > extBatVolt) {
+              batVolt = extBatVolt;
+            }
+          } else {
+            String msg = "ERROR: Lc" + String(i + 1) + " no data";
+            errMsg[++errMsgCnt] = msg + "\n";
+            printConsole(T_ERROR, msg);
+          }
+          
+          http.end();
+        }
+#endif
       }
     }
   }
@@ -1498,42 +1646,42 @@ void loop() {
     }
 
     if (weightTotal > MINIMAL_CG_WEIGHT) {
-      // CG longitudinal axis
-      CG_length = ((weightLoadCell[LC2] * model.distance[X2]) / weightTotal) + model.distance[X1];
-
+      if (nLoadcells > 1) {
+        // CG longitudinal axis
+        CG_length = ((weightLoadCell[LC2] * model.distance[X2]) / weightTotal) + model.distance[X1];
+  
 #if defined(ESP8266)
-      if (model.mechanicsType == 2) {
-        CG_length = ((weightLoadCell[LC2] * model.distance[X2]) / weightTotal) - model.distance[X1];
-      } else if (model.mechanicsType == 3) {
-        CG_length = ((weightLoadCell[LC2] * model.distance[X2]) / weightTotal) * -1 + model.distance[X1];
-      }
-
-      /* Virtual weights 
-
-      m = weight
-      d = cg
-      d_new=(m1*d1+m2*d2)/(m1+m2)
-      */
-
-      for (int i=0; i < MAX_VIRTUAL_WEIGHT; i++){
-        if(model.virtualWeight[i].enabled == true){
-          CG_length = (weightTotal * CG_length + model.virtualWeight[i].weight * model.virtualWeight[i].cg) / (weightTotal + model.virtualWeight[i].weight);
+        if (model.mechanicsType == 2) {
+          CG_length = ((weightLoadCell[LC2] * model.distance[X2]) / weightTotal) - model.distance[X1];
+        } else if (model.mechanicsType == 3) {
+          CG_length = ((weightLoadCell[LC2] * model.distance[X2]) / weightTotal) * -1 + model.distance[X1];
         }
-      }
-
-      for (int i=0; i < MAX_VIRTUAL_WEIGHT; i++){
-        if(model.virtualWeight[i].enabled == true){
-          weightTotal +=  model.virtualWeight[i].weight;
+  
+        /* Virtual weights 
+  
+        m = weight
+        d = cg
+        d_new=(m1*d1+m2*d2)/(m1+m2)
+        */
+  
+        for (int i=0; i < MAX_VIRTUAL_WEIGHT; i++){
+          if(model.virtualWeight[i].enabled == true){
+            CG_length = (weightTotal * CG_length + model.virtualWeight[i].weight * model.virtualWeight[i].cg) / (weightTotal + model.virtualWeight[i].weight);
+          }
         }
-      }
-
-      
-      
-#endif
-
-      // CG transverse axis
-      if (nLoadcells == 3) {
-        CG_trans = (model.distance[X3] / 2) - (((weightLoadCell[LC1] + weightLoadCell[LC2] / 2) * model.distance[X3]) / weightTotal);
+  
+        for (int i=0; i < MAX_VIRTUAL_WEIGHT; i++){
+          if(model.virtualWeight[i].enabled == true){
+            weightTotal +=  model.virtualWeight[i].weight;
+          }
+        }
+        
+  #endif
+  
+        // CG transverse axis
+        if (nLoadcells == 3) {
+          CG_trans = (model.distance[X3] / 2) - (((weightLoadCell[LC1] + weightLoadCell[LC2] / 2) * model.distance[X3]) / weightTotal);
+        }
       }
 
     } else {
@@ -1541,17 +1689,9 @@ void loop() {
       CG_trans = 0;
     }
 
-    // read battery voltage
-    if (batType > B_OFF) {
-      batVolt = (analogRead(VOLTAGE_PIN) / 1024.0) * V_REF * ((resistor[R1] + resistor[R2]) / resistor[R2]) / 1000.0;
-#if ENABLE_PERCENTLIST
-      if (batType > B_VOLT) {
-        batVolt = percentBat(batVolt / batCells);
-      }
-#endif
-    }
+    
 
-    printScaleOLED();
+    printScaleOLED();  
 
     // serial connection
     if (Serial) {

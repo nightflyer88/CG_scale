@@ -97,7 +97,11 @@ enum {
   P_MODELNAME =                         P_PASSWORD_AP + MAX_SSID_PW_LENGHT + 1,
   P_ENABLE_UPDATE =                     P_MODELNAME + MAX_MODELNAME_LENGHT + 1,
   P_ENABLE_OTA =                        P_ENABLE_UPDATE + 1,
-  EEPROM_SIZE =                         P_ENABLE_OTA + 1
+  P_DEVICENAME =                        P_ENABLE_OTA + 1,
+  P_LC1_URL =                           P_DEVICENAME + MAX_SSID_PW_LENGHT + 1,
+  P_LC2_URL =                           P_LC1_URL + MAX_SSID_PW_LENGHT + 1,
+  P_LC3_URL =                           P_LC2_URL + MAX_SSID_PW_LENGHT + 1,
+  EEPROM_SIZE =                         P_LC3_URL + MAX_SSID_PW_LENGHT + 1
 #endif
 };
 

@@ -51,8 +51,8 @@ CG scale with 3 Loadcells:
 #define PIN_LOADCELL2_DOUT            A0
 #define PIN_LOADCELL2_PD_SCK          A1
   
-#define PIN_LOADCELL3_DOUT            A9
-#define PIN_LOADCELL3_PD_SCK          A10
+#define PIN_LOADCELL3_DOUT            A0//A9
+#define PIN_LOADCELL3_PD_SCK          A1//A10
 
 
 
@@ -84,7 +84,8 @@ CG scale with 3 Loadcells:
 U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 //U8G2_SSD1306_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
-
+#define DISPLAY_WIDTH                 128
+#define DISPLAY_HIGHT                 64
 
 // **** Voltage measurement settings ****
 
@@ -117,7 +118,7 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NON
 */
 
 // calculate voltage to percent
-#define ENABLE_PERCENTLIST            true
+#define ENABLE_PERCENTLIST            false
 
 // Battery type
 #define BAT_TYPE                      B_VOLT
