@@ -4,11 +4,12 @@
                       (c) 2019-2020 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "2.3.2"
+#define CGSCALE_VERSION "2.3.3"
 /*
 
   ******************************************************************
   history:
+  V2.3.3  26.09.24     fix LittleFS
   V2.3.2  26.09.24     Change from SPIFFS to LittleFS
   V2.3.1  26.09.24     Compiler Errors fixes
   V2.3    01.03.22     Up to three ESPs can be linked via WLAN. Useful for landing gear scales on engine models
@@ -95,7 +96,7 @@
 
 // libraries for ESP8266
 #if defined(ESP8266)
-#include <FS.h>
+#include <LittleFS.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <WiFiClientSecure.h>
@@ -627,9 +628,9 @@ bool saveModelJson(String modelName) {
 
   DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
 
-  if (SPIFFS.exists(MODEL_FILE)) {
+  if (LittleFS.exists(MODEL_FILE)) {
     // read json file
-    File f = SPIFFS.open(MODEL_FILE, "r");
+    File f = LittleFS.open(MODEL_FILE, "r");
     auto error = deserializeJson(jsonDoc, f);
     f.close();
     if (error) {
@@ -645,7 +646,7 @@ bool saveModelJson(String modelName) {
     }
     // write to file
     if (!error) {
-      f = SPIFFS.open(MODEL_FILE, "w");
+      f = LittleFS.open(MODEL_FILE, "w");
       serializeJson(jsonDoc, f);
       f.close();
     } else {
@@ -657,7 +658,7 @@ bool saveModelJson(String modelName) {
     writeModelData(jsonDoc.createNestedObject(modelName));
     // write to file
     if (!jsonDoc.isNull()) {
-      File f = SPIFFS.open(MODEL_FILE, "w");
+      File f = LittleFS.open(MODEL_FILE, "w");
       serializeJson(jsonDoc, f);
       f.close();
     } else {
@@ -675,9 +676,9 @@ bool openModelJson(String modelName) {
 
   DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
 
-  if (SPIFFS.exists(MODEL_FILE)) {
+  if (LittleFS.exists(MODEL_FILE)) {
     // read json file
-    File f = SPIFFS.open(MODEL_FILE, "r");
+    File f = LittleFS.open(MODEL_FILE, "r");
     auto error = deserializeJson(jsonDoc, f);
     f.close();
     if (error) {
@@ -726,9 +727,9 @@ bool deleteModelJson(String modelName) {
 
   DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
 
-  if (SPIFFS.exists(MODEL_FILE)) {
+  if (LittleFS.exists(MODEL_FILE)) {
     // read json file
-    File f = SPIFFS.open(MODEL_FILE, "r");
+    File f = LittleFS.open(MODEL_FILE, "r");
     auto error = deserializeJson(jsonDoc, f);
     f.close();
     if (error) {
@@ -744,11 +745,11 @@ bool deleteModelJson(String modelName) {
     }
     // if no models in json, kill it
     if (jsonDoc.size() == 0) {
-      SPIFFS.remove(MODEL_FILE);
+      LittleFS.remove(MODEL_FILE);
     } else {
       // write to file
       if (!jsonDoc.isNull()) {
-        File f = SPIFFS.open(MODEL_FILE, "w");
+        File f = LittleFS.open(MODEL_FILE, "w");
         serializeJson(jsonDoc, f);
         f.close();
       } else {
@@ -843,9 +844,9 @@ void getParameter() {
 
   DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
 
-  if (SPIFFS.exists(MODEL_FILE)) {
+  if (LittleFS.exists(MODEL_FILE)) {
     // read json file
-    File f = SPIFFS.open(MODEL_FILE, "r");
+    File f = LittleFS.open(MODEL_FILE, "r");
     auto error = deserializeJson(jsonDoc, f);
     f.close();
     // check if model exists
@@ -1117,10 +1118,10 @@ bool handleFileRead(String path) {
   String pathWithGz = path + ".gz";
 
   // If the file exists, either as a compressed archive, or normal
-  if (SPIFFS.exists(pathWithGz) || SPIFFS.exists(path)) {
-    if (SPIFFS.exists(pathWithGz))
+  if (LittleFS.exists(pathWithGz) || LittleFS.exists(path)) {
+    if (LittleFS.exists(pathWithGz))
       path += ".gz";
-    File file = SPIFFS.open(path, "r");
+    File file = LittleFS.open(path, "r");
     size_t sent = server.streamFile(file, contentType);
     file.close();
     return true;
@@ -1130,7 +1131,7 @@ bool handleFileRead(String path) {
 }
 
 
-// upload a new file to the SPIFFS
+// upload a new file to the LittleFS
 void handleFileUpload() {
 
   HTTPUpload& upload = server.upload();
@@ -1139,8 +1140,8 @@ void handleFileUpload() {
     String filename = upload.filename;
     if (!filename.startsWith("/")) filename = "/" + filename;
     if (filename != MODEL_FILE ) server.send(500, "text/plain", "wrong file !");
-    // Open the file for writing in SPIFFS (create if it doesn't exist)
-    fsUploadFile = SPIFFS.open(filename, "w");
+    // Open the file for writing in LittleFS (create if it doesn't exist)
+    fsUploadFile = LittleFS.open(filename, "w");
     filename = String();
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     // Write the received bytes to the file
@@ -1262,7 +1263,7 @@ void setup() {
   printConsole(T_BOOT, "startup CG scale V" + String(CGSCALE_VERSION));
 
   // init filesystem
-  SPIFFS.begin();
+  LittleFS.begin();
   EEPROM.begin(EEPROM_SIZE);
   printConsole(T_BOOT, "init filesystem");
 #endif
@@ -1495,10 +1496,10 @@ void setup() {
       String type;
       if (ArduinoOTA.getCommand() == U_FLASH) {
         type = "firmware";
-      } else { // U_SPIFFS
-        type = "SPIFFS";
+      } else { // U_LittleFS
+        type = "LittleFS";
       }
-      // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+      // NOTE: if updating LittleFS this would be the place to unmount LittleFS using LittleFS.end()
       updateMsg = "Updating " + type;
       printConsole(T_UPDATE, type);
     });
@@ -1792,8 +1793,8 @@ void loop() {
 #if defined(ESP8266)
               EEPROM.commit();
               // delete json model file
-              if (SPIFFS.exists(MODEL_FILE)) {
-                SPIFFS.remove(MODEL_FILE);
+              if (LittleFS.exists(MODEL_FILE)) {
+                LittleFS.remove(MODEL_FILE);
               }
 #endif
               resetCPU();
