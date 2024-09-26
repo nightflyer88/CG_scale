@@ -4,11 +4,12 @@
                       (c) 2019-2020 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "2.3"
+#define CGSCALE_VERSION "2.3.1"
 /*
 
   ******************************************************************
   history:
+  V2.3.1  26.09.24     Compiler Errors fixes
   V2.3    01.03.22     Up to three ESPs can be linked via WLAN. Useful for landing gear scales on engine models
   V2.22   28.11.20     fixed RAM problems with JSON
   V2.21   27.11.20     bug fixed: recompiled, binary file incorrect
@@ -555,6 +556,7 @@ bool runAutoCalibrate() {
 
   // finish
   Serial.println(F("done"));
+  return true;
 }
 
 
@@ -1190,7 +1192,7 @@ bool httpsUpdate(uint8_t command) {
   HTTPClient https;
   https.setUserAgent("cgscale");
   https.setRedirectLimit(0);
-  https.setFollowRedirects(true);
+  https.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
   String url = "https://" + String(HOST) + String(URL);
   if (https.begin(httpsClient, url)) {
