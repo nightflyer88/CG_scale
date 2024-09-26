@@ -4,11 +4,12 @@
                       (c) 2019-2020 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "2.3.1"
+#define CGSCALE_VERSION "2.3.2"
 /*
 
   ******************************************************************
   history:
+  V2.3.2  26.09.24     Change from SPIFFS to LittleFS
   V2.3.1  26.09.24     Compiler Errors fixes
   V2.3    01.03.22     Up to three ESPs can be linked via WLAN. Useful for landing gear scales on engine models
   V2.22   28.11.20     fixed RAM problems with JSON
