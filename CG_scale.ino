@@ -4,12 +4,14 @@
                       (c) 2019-2020 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "2.3.3"
+#define CGSCALE_VERSION "2.3.4"
 /*
 
   ******************************************************************
   history:
-  V2.3.3  26.09.24     fix LittleFS
+  V2.3.4  26.09.24     settings.html text fix SPIFFS to LittleFS
+                       Release 2.3.4
+  V2.3.3  26.09.24     fix Litt.leFS
   V2.3.2  26.09.24     Change from SPIFFS to LittleFS
   V2.3.1  26.09.24     Compiler Errors fixes
   V2.3    01.03.22     Up to three ESPs can be linked via WLAN. Useful for landing gear scales on engine models
