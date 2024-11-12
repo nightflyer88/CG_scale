@@ -1,6 +1,8 @@
 # CG scale
 
-[DE] Die CG Scale-Firmware ist Quelloffen und kostenlos erhältlich. Wenn es Ihnen gefällt, unterstützen Sie das Projekt mit einer Spende und helfen Sie mit, dass es kontinuierlich weiterentwickelt wird.
+# GERMAN
+
+Die CG Scale-Firmware ist Quelloffen und kostenlos erhältlich. Wenn es Ihnen gefällt, unterstützen Sie das Projekt mit einer Spende und helfen Sie mit, dass es kontinuierlich weiterentwickelt wird.
 
 [![Donate](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/Paypal.png)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=R69PMKTCXQBUU&source=url)
 
@@ -20,7 +22,10 @@ Die wichtigsten Funktionen:
 Weiter infos zum Aufbau findet man im [Wiki](https://github.com/nightflyer88/CG_scale/wiki)
 
 
-[EN] The CG Scale firmware is open source and available for free. If you like it, support the project with a donation and help it continue to develop.
+
+# ENGLISH
+
+The CG Scale firmware is open source and available for free. If you like it, support the project with a donation and help it continue to develop.
 
 [![Donate](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/Paypal.png)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=R69PMKTCXQBUU&source=url)
 
@@ -40,7 +45,10 @@ The most important functions:
 Further information about the assembly can be found in the [Wiki](https://github.com/nightflyer88/CG_scale/wiki)
 
 
-[FR] Le micrologiciel CG Scale est open source et disponible gratuitement. Si vous l'aimez, soutenez le projet par un don et aidez-le à continuer à se développer.
+
+# FRANCAIS
+
+Le micrologiciel CG Scale est open source et disponible gratuitement. Si vous l'aimez, soutenez le projet par un don et aidez-le à continuer à se développer.
 
 [![Donate](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/Paypal.png)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=R69PMKTCXQBUU&source=url)
 
