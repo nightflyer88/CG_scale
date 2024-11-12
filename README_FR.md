@@ -17,7 +17,7 @@ Les fonctions les plus importantes :
 - Les paramètres sont enregistrés de manière permanente dans l'EEprom et ne doivent pas être reparamétrés après une mise à jour du logiciel
 - Seulement quelques composants requis, ce qui rend l'assemblage rapide et facile
 
-De plus amples informations sur l'assemblage peuvent être trouvées dans le [Wiki].(https://github.com/ZINKTiti/CG_scale-1/wiki)
+De plus amples informations sur l'assemblage peuvent être trouvées dans le [Wiki](https://github.com/ZINKTiti/CG_scale-1/wiki)
 
 ![init](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/cgScale_init.jpeg)
 ![run](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/cgScale.jpeg)
