@@ -1,0 +1,11 @@
+Balance basée sur Arduino pour peser des modèles réduits d'avions. Relativement peu de composants sont nécessaires et devraient être faciles à recréer, même pour les débutants en électronique. Les fonctions les plus importantes :
+
+* prend en charge les balances avec 2 ou 3 cellules de pesée
+* prend en charge ESP8266 (également Wifi Kit 8) et Arduino avec ATmega328, ATmega32u4
+* Calibrage automatique basé sur un objet de référence, ce qui signifie qu'il n'y a pas de détermination laborieuse des valeurs de calibrage
+* Affichage via écran OLED
+* La tension de la batterie peut être mesurée
+* Les réglages s'effectuent via un menu via l'interface série
+* Avec l'ESP8266, les réglages peuvent également être effectués facilement via la page Web
+* Les paramètres sont enregistrés de manière permanente dans l'EEprom et ne doivent pas être reparamétrés après une mise à jour du logiciel
+* Seulement quelques composants requis, ce qui rend l'assemblage rapide et facile
