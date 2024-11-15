@@ -20,12 +20,12 @@ The most important functions:
 # ENGLISH
 
 Here is the assembly and user guide for this scale model balance
-You can find the full description [HERE](ENGLISH)
+You can find the full description [HERE](https://github.com/ZINKTiti/CG_scale-1/wiki/ENGLISH)
 
 # FRANCAIS
 
 Voici le guide de montage et d'utilisation de cette balance pour model réduit
-Vous trouver toute la description [ICI](FRANCAIS)
+Vous trouver toute la description [ICI](https://github.com/ZINKTiti/CG_scale-1/wiki/FRANCAIS)
 
 # DEUTSCH
 
