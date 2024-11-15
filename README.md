@@ -17,7 +17,20 @@ The most important functions:
 - Parameters are permanently saved in the EEprom and do not have to be re-parameterized after a software update
 - Only a few components required, making it quick and easy to assemble
 
-Further information about the assembly can be found in the [Wiki](https://github.com/ZINKTiti/CG_scale-1/wiki)
+# ENGLISH
+
+Here is the assembly and user guide for this scale model balance
+You can find the full description [HERE](ENGLISH)
+
+# FRANCAIS
+
+Voici le guide de montage et d'utilisation de cette balance pour model réduit
+Vous trouver toute la description [ICI](FRANCAIS)
+
+# DEUTSCH
+
+Hier finden Sie die Montage- und Bedienungsanleitung für diese Modellwaage
+Sie finden die gesamte Beschreibung [HIER](https://github.com/nightflyer88/CG_scale/wiki)
 
 ![init](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/cgScale_init.jpeg)
 ![run](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/cgScale.jpeg)
