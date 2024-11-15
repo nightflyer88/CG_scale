@@ -17,7 +17,7 @@ The most important functions:
 - Parameters are permanently saved in the EEprom and do not have to be re-parameterized after a software update
 - Only a few components required, making it quick and easy to assemble
 
-Further information about the assembly can be found in the [Wiki](https://github.com/nightflyer88/CG_scale/wiki)
+Further information about the assembly can be found in the [Wiki](https://github.com/ZINKTiti/CG_scale-1/wiki)
 
 ![init](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/cgScale_init.jpeg)
 ![run](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/cgScale.jpeg)
