@@ -1,14 +1,15 @@
 /*
   ------------------------------------------------------------------
                             CG scale
-                      (c) 2019-2020 by M. Lehmann
+                      (c) 2019-2025 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "2.3"
+#define CGSCALE_VERSION "2.31"
 /*
 
   ******************************************************************
   history:
+  V2.31   22.04.25     Library update to littleFS, ArduinoJson 7, webpage update, add color profiles
   V2.3    01.03.22     Up to three ESPs can be linked via WLAN. Useful for landing gear scales on engine models
   V2.22   28.11.20     fixed RAM problems with JSON
   V2.21   27.11.20     bug fixed: recompiled, binary file incorrect
@@ -50,7 +51,7 @@
 
   Software License Agreement (BSD License)
 
-  Copyright (c) 2019-2020, Michael Lehmann
+  Copyright (c) 2019-2024, Michael Lehmann
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -81,7 +82,10 @@
 
 //#define WIFI_KIT_8    //is a ESP8266 based board, with integrated OLED and battery management
 
+
+
 // ******************************************************************
+// Arduino IDE V2.3.6
 
 // Required libraries, can be installed from the library manager
 #include <HX711_ADC.h>      // library for the HX711 24-bit ADC for weight scales (https://github.com/olkal/HX711_ADC)
@@ -94,6 +98,7 @@
 // libraries for ESP8266
 #if defined(ESP8266)
 #include <FS.h>
+#include <LittleFS.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <WiFiClientSecure.h>
@@ -101,8 +106,8 @@
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
-#include <ElegantOTA.h>
-#include <ArduinoJson.h>
+#include <ElegantOTA.h> //V2.2.9
+#include <ArduinoJson.h> //V7.4.1
 #endif
 
 // load settings
@@ -189,6 +194,7 @@ const uint8_t *oledFontSmall;
 String updateMsg = "";
 bool wifiSTAmode = true;
 float gitVersion = -1;
+unsigned long ota_progress_millis = 0;
 #endif
 
 
@@ -199,6 +205,23 @@ void(* resetCPU) (void) = 0;
 #elif defined(ESP8266)
 void resetCPU() {}
 #endif
+
+
+void readFile(const char * path) {
+  Serial.printf("Reading file: %s\n", path);
+
+  File file = LittleFS.open(path, "r");
+  if (!file) {
+    Serial.println("Failed to open file for reading");
+    return;
+  }
+
+  Serial.print("Read from file: ");
+  while (file.available()) {
+    Serial.write(file.read());
+  }
+  file.close();
+}
 
 
 // convert time to string
@@ -330,7 +353,7 @@ void initOLED() {
 #else
     oledDisplay.setCursor(20, 64);
 #endif
-    oledDisplay.print(F("(c) 2020 M.Lehmann"));
+    oledDisplay.print(F("(c) 2025 M.Lehmann"));
 
   } while ( oledDisplay.nextPage() );
 }
@@ -555,6 +578,8 @@ bool runAutoCalibrate() {
 
   // finish
   Serial.println(F("done"));
+  
+  return true;
 }
 
 
@@ -576,6 +601,22 @@ bool getLoadcellError() {
   }
 
   return err;
+}
+
+void resetFactoryDefaults(){
+  // reset eeprom
+  for (int i = 0; i < EEPROM_SIZE; i++) {
+    EEPROM.write(i, 0xFF);
+  }
+  Serial.end();
+#if defined(ESP8266)
+  EEPROM.commit();
+  // delete json model file
+  if (LittleFS.exists(MODEL_FILE)) {
+    LittleFS.remove(MODEL_FILE);
+  }
+#endif
+  resetCPU();
 }
 
 
@@ -604,9 +645,9 @@ void writeModelData(JsonObject object) {
   object["cgmax"] = model.targetCGmax;
   object["mType"] = model.mechanicsType;
 
-  JsonArray virtw = object.createNestedArray("virtual");
+  JsonArray virtw = object["virtual"].to<JsonArray>();
   for (int i=0; i < MAX_VIRTUAL_WEIGHT; i++){
-    JsonArray virtWeight = virtw.createNestedArray();
+    JsonArray virtWeight = virtw.add<JsonArray>();
     virtWeight.add(model.virtualWeight[i].name);
     virtWeight.add(model.virtualWeight[i].cg);
     virtWeight.add(model.virtualWeight[i].weight);
@@ -622,15 +663,15 @@ bool saveModelJson(String modelName) {
     return false;
   }
 
-  DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
+  JsonDocument jsonDoc;
 
-  if (SPIFFS.exists(MODEL_FILE)) {
+  if (LittleFS.exists(MODEL_FILE)) {
     // read json file
-    File f = SPIFFS.open(MODEL_FILE, "r");
-    auto error = deserializeJson(jsonDoc, f);
+    File f = LittleFS.open(MODEL_FILE, "r");
+    DeserializationError error = deserializeJson(jsonDoc, f);
     f.close();
     if (error) {
-      printConsole(T_ERROR, "save JSON: " + String(error.c_str()));
+      printConsole(T_ERROR, "save JSON: " + String(error.f_str()));
       return false;
     }
     // check if model exists
@@ -638,11 +679,11 @@ bool saveModelJson(String modelName) {
       writeModelData(jsonDoc[modelName]);
     } else {
       // otherwise create new
-      writeModelData(jsonDoc.createNestedObject(modelName));
+      writeModelData(jsonDoc[modelName].to<JsonObject>());
     }
     // write to file
     if (!error) {
-      f = SPIFFS.open(MODEL_FILE, "w");
+      f = LittleFS.open(MODEL_FILE, "w");
       serializeJson(jsonDoc, f);
       f.close();
     } else {
@@ -651,10 +692,11 @@ bool saveModelJson(String modelName) {
     }
   } else {
     // creat new json
-    writeModelData(jsonDoc.createNestedObject(modelName));
+    writeModelData(jsonDoc[modelName].to<JsonObject>());
+
     // write to file
     if (!jsonDoc.isNull()) {
-      File f = SPIFFS.open(MODEL_FILE, "w");
+      File f = LittleFS.open(MODEL_FILE, "w");
       serializeJson(jsonDoc, f);
       f.close();
     } else {
@@ -670,15 +712,15 @@ bool saveModelJson(String modelName) {
 // read model data from json file
 bool openModelJson(String modelName) {
 
-  DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
+  JsonDocument jsonDoc;
 
-  if (SPIFFS.exists(MODEL_FILE)) {
+  if (LittleFS.exists(MODEL_FILE)) {
     // read json file
-    File f = SPIFFS.open(MODEL_FILE, "r");
-    auto error = deserializeJson(jsonDoc, f);
+    File f = LittleFS.open(MODEL_FILE, "r");
+    DeserializationError error = deserializeJson(jsonDoc, f);
     f.close();
     if (error) {
-      printConsole(T_ERROR, "open JSON: " + String(error.c_str()));
+      printConsole(T_ERROR, "open JSON: " + String(error.f_str()));
       return false;
     }
     // check if model exists
@@ -721,15 +763,17 @@ bool openModelJson(String modelName) {
 // delete model from json file
 bool deleteModelJson(String modelName) {
 
-  DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
+  JsonDocument jsonDoc;
 
-  if (SPIFFS.exists(MODEL_FILE)) {
+  Serial.println(modelName);
+
+  if (LittleFS.exists(MODEL_FILE)) {
     // read json file
-    File f = SPIFFS.open(MODEL_FILE, "r");
-    auto error = deserializeJson(jsonDoc, f);
+    File f = LittleFS.open(MODEL_FILE, "r");
+    DeserializationError error = deserializeJson(jsonDoc, f);
     f.close();
     if (error) {
-      printConsole(T_ERROR, "delete JSON: " + String(error.c_str()));
+      printConsole(T_ERROR, "delete JSON: " + String(error.f_str()));
       return false;
     }
     // check if model exists
@@ -741,11 +785,11 @@ bool deleteModelJson(String modelName) {
     }
     // if no models in json, kill it
     if (jsonDoc.size() == 0) {
-      SPIFFS.remove(MODEL_FILE);
+      LittleFS.remove(MODEL_FILE);
     } else {
       // write to file
       if (!jsonDoc.isNull()) {
-        File f = SPIFFS.open(MODEL_FILE, "w");
+        File f = LittleFS.open(MODEL_FILE, "w");
         serializeJson(jsonDoc, f);
         f.close();
       } else {
@@ -838,12 +882,12 @@ void getParameter() {
   model.targetCGmin = 0;
   model.targetCGmax = 0;
 
-  DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
+  JsonDocument jsonDoc;
 
-  if (SPIFFS.exists(MODEL_FILE)) {
+  if (LittleFS.exists(MODEL_FILE)) {
     // read json file
-    File f = SPIFFS.open(MODEL_FILE, "r");
-    auto error = deserializeJson(jsonDoc, f);
+    File f = LittleFS.open(MODEL_FILE, "r");
+    DeserializationError error = deserializeJson(jsonDoc, f);
     f.close();
     // check if model exists
     if (!error && jsonDoc.containsKey(model.name)) {
@@ -921,11 +965,11 @@ void getParameter() {
 void getVirtualWeight() {
   String response = "";
 
-  DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
+  JsonDocument jsonDoc;
 
-  JsonArray virtw = jsonDoc.createNestedArray("virtual");
+  JsonArray virtw = jsonDoc["virtual"].to<JsonArray>();
   for (int i=0; i < MAX_VIRTUAL_WEIGHT; i++){
-    JsonArray virtWeight = virtw.createNestedArray();
+    JsonArray virtWeight = virtw.add<JsonArray>();
     virtWeight.add(model.virtualWeight[i].name);
     virtWeight.add(model.virtualWeight[i].cg);
     virtWeight.add(model.virtualWeight[i].weight);
@@ -1045,7 +1089,7 @@ void saveModel() {
     if (server.hasArg("distanceX3")) model.distance[X3] = server.arg("distanceX3").toFloat();
     if (server.hasArg("mechanicsType")) model.mechanicsType = server.arg("mechanicsType").toInt();
     if(server.hasArg("virtualWeight")){    
-      DynamicJsonDocument jsonDoc(JSONDOC_SIZE);
+      JsonDocument jsonDoc;
       String json = server.arg("virtualWeight");
       json.replace("%22", "\"");
       deserializeJson(jsonDoc, json);
@@ -1092,6 +1136,18 @@ void deleteModel() {
   server.send(404, "text/plain", "404: Delete model failed !");
 }
 
+// Factory default reset
+void factoryReset() {
+  if (server.hasArg("reset")) {
+    if (server.arg("reset")=="1") {
+      resetFactoryDefaults();
+      server.send(200, "text/plain", "Factory reset successfully");
+      return;
+    }
+  }
+  server.send(404, "text/plain", "404: Factory reset failed !");
+}
+
 
 // convert the file extension to the MIME type
 String getContentType(String filename) {
@@ -1114,10 +1170,10 @@ bool handleFileRead(String path) {
   String pathWithGz = path + ".gz";
 
   // If the file exists, either as a compressed archive, or normal
-  if (SPIFFS.exists(pathWithGz) || SPIFFS.exists(path)) {
-    if (SPIFFS.exists(pathWithGz))
+  if (LittleFS.exists(pathWithGz) || LittleFS.exists(path)) {
+    if (LittleFS.exists(pathWithGz))
       path += ".gz";
-    File file = SPIFFS.open(path, "r");
+    File file = LittleFS.open(path, "r");
     size_t sent = server.streamFile(file, contentType);
     file.close();
     return true;
@@ -1127,7 +1183,7 @@ bool handleFileRead(String path) {
 }
 
 
-// upload a new file to the SPIFFS
+// upload a new file to the Filesystem
 void handleFileUpload() {
 
   HTTPUpload& upload = server.upload();
@@ -1136,8 +1192,8 @@ void handleFileUpload() {
     String filename = upload.filename;
     if (!filename.startsWith("/")) filename = "/" + filename;
     if (filename != MODEL_FILE ) server.send(500, "text/plain", "wrong file !");
-    // Open the file for writing in SPIFFS (create if it doesn't exist)
-    fsUploadFile = SPIFFS.open(filename, "w");
+    // Open the file for writing in Filesystem (create if it doesn't exist)
+    fsUploadFile = LittleFS.open(filename, "w");
     filename = String();
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     // Write the received bytes to the file
@@ -1190,7 +1246,7 @@ bool httpsUpdate(uint8_t command) {
   HTTPClient https;
   https.setUserAgent("cgscale");
   https.setRedirectLimit(0);
-  https.setFollowRedirects(true);
+  https.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
   String url = "https://" + String(HOST) + String(URL);
   if (https.begin(httpsClient, url)) {
@@ -1245,6 +1301,31 @@ void waitWiFiconnected() {
   }
 }
 
+void onOTAStart() {
+  updateMsg = "start update...";
+  printConsole(T_UPDATE, updateMsg);
+}
+
+void onOTAProgress(size_t current, size_t final) {
+  // Log every 1 second
+  if (millis() - ota_progress_millis > 1000) {
+    ota_progress_millis = millis();
+    updateMsg = "update in progress";
+    printUpdateProgress(current, final);
+  }
+}
+
+void onOTAEnd(bool success) {
+  // Log when OTA has finished
+  if (success) {
+    updateMsg = "successful..";
+    printUpdateProgress(100, 100);
+  } else {
+    updateMsg = "error during update!";
+    printUpdateProgress(0, 100);
+  }
+}
+
 #endif
 
 
@@ -1259,9 +1340,16 @@ void setup() {
   printConsole(T_BOOT, "startup CG scale V" + String(CGSCALE_VERSION));
 
   // init filesystem
-  SPIFFS.begin();
+  if (LittleFS.begin()) {
+    printConsole(T_BOOT, "LittleFS mounted..");
+  }else{
+    printConsole(T_ERROR, "LittleFS mount failed");
+  }
   EEPROM.begin(EEPROM_SIZE);
   printConsole(T_BOOT, "init filesystem");
+
+  readFile(MODEL_FILE);
+  Serial.println();
 #endif
 
   // read settings from eeprom
@@ -1381,7 +1469,7 @@ void setup() {
 
 #if defined(ESP8266)
 
-  printConsole(T_BOOT, "Wifi: STA mode - connecing with: " + String(ssid_STA));
+  printConsole(T_BOOT, "Wifi: STA mode - connecting with: " + String(ssid_STA));
 
   // Start by connecting to a WiFi network
   WiFi.persistent(false);
@@ -1395,21 +1483,6 @@ void setup() {
     WiFi.begin(ssid_AP, password_AP);
     waitWiFiconnected();
   }
-  /*long timeoutWiFi = millis();
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    if (WiFi.status() == WL_NO_SSID_AVAIL) {
-      printConsole(T_ERROR, "\nWifi: No SSID available");
-      break;
-    } else if (WiFi.status() == WL_CONNECT_FAILED) {
-      printConsole(T_ERROR, "\nWifi: Connection failed");
-      break;
-    } else if ((millis() - timeoutWiFi) > TIMEOUT_CONNECT) {
-      printConsole(T_ERROR, "\nWifi: Timeout");
-      break;
-    }
-  }*/
-
 
   if (WiFi.status() != WL_CONNECTED) {
     // if WiFi not connected, switch to access point mode
@@ -1464,6 +1537,7 @@ void setup() {
   server.on("/saveModel", saveModel);
   server.on("/openModel", openModel);
   server.on("/deleteModel", deleteModel);
+  server.on("/factoryReset", factoryReset);
 
   // When the client upload file
   server.on("/settings.html", HTTP_POST, []() {
@@ -1476,13 +1550,6 @@ void setup() {
       server.send(404, "text/plain", "CGscale Error: 404\n File or URL not Found !");
   });
 
-  // init ElegantOTA
-  ElegantOTA.begin(&server);
-
-  // init webserver
-  server.begin();
-  printConsole(T_RUN, "Webserver is up and running");
-
   // init OTA (over the air update)
   if (enableOTA) {
     ArduinoOTA.setHostname(ssid_AP);
@@ -1492,8 +1559,8 @@ void setup() {
       String type;
       if (ArduinoOTA.getCommand() == U_FLASH) {
         type = "firmware";
-      } else { // U_SPIFFS
-        type = "SPIFFS";
+      } else { // U_FS
+        type = "filesystem";
       }
       // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
       updateMsg = "Updating " + type;
@@ -1525,7 +1592,14 @@ void setup() {
     });
 
     ArduinoOTA.begin();
+
+    ElegantOTA.begin(&server);    // Start ElegantOTA
+
     printConsole(T_RUN, "OTA is up and running");
+
+     // init webserver
+    server.begin();
+    printConsole(T_RUN, "Webserver is up and running");
   }
 
   // https update
@@ -1549,7 +1623,7 @@ void loop() {
 #endif
 
   if (enableOTA) {
-    ArduinoOTA.handle();
+    //ArduinoOTA.handle();
   }
   server.handleClient();
 #endif
@@ -1740,7 +1814,7 @@ void loop() {
             updateMenu = true;
             break;
           case MENU_AUTO_CALIBRATE:
-            if (Serial.read() == 'J') {
+            if (Serial.read() == 'Y') {
               runAutoCalibrate();
             }
             menuPage = 0;
@@ -1780,20 +1854,8 @@ void loop() {
             updateMenu = true;
             break;
           case MENU_RESET_DEFAULT:
-            if (Serial.read() == 'J') {
-              // reset eeprom
-              for (int i = 0; i < EEPROM_SIZE; i++) {
-                EEPROM.write(i, 0xFF);
-              }
-              Serial.end();
-#if defined(ESP8266)
-              EEPROM.commit();
-              // delete json model file
-              if (SPIFFS.exists(MODEL_FILE)) {
-                SPIFFS.remove(MODEL_FILE);
-              }
-#endif
-              resetCPU();
+            if (Serial.read() == 'Y') {
+              resetFactoryDefaults();
             }
             menuPage = 0;
             updateMenu = true;
@@ -1925,7 +1987,7 @@ void loop() {
           updateMenu = false;
           break;
         case MENU_AUTO_CALIBRATE:
-          Serial.print(F("\n\nPlease put the reference weight on the scale.\nStart auto calibration (J/N)?\n"));
+          Serial.print(F("\n\nPlease put the reference weight on the scale.\nStart auto calibration (Y/N)?\n"));
           updateMenu = false;
           break;
         case MENU_LOADCELL1_CALIBRATION_FACTOR ... MENU_LOADCELL3_CALIBRATION_FACTOR:
@@ -2039,7 +2101,7 @@ void loop() {
           break;
 #endif
         case MENU_RESET_DEFAULT:
-          Serial.print(F("\n\nReset to factory defaults (J/N)?\n"));
+          Serial.print(F("\n\nReset to factory defaults (Y/N)?\n"));
           updateMenu = false;
           break;
       }
