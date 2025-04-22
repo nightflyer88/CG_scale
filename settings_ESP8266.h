@@ -162,7 +162,6 @@ const char ip[4] =                  {1,2,3,4};    // default IP address
 #define MAX_MODELNAME_LENGHT        32               // max chars 
 #define DEFAULT_NAME                "Model"          // default model name
 #define MODEL_FILE                  "/models.json"   // file to store models
-#define JSONDOC_SIZE                20000            // max file size in bytes
 
 
 
