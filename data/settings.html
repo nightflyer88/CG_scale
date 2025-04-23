@@ -7,41 +7,9 @@
     <meta name="author" content="M. Lehmann">
     <title>CG scale by M. Lehmann</title>
     <style>
-        :root {
-            --window_background_color:#DCDCDC;
-            --navbar_background_color:#555555;
-            --navbar_font_color:#ffffff;
-            --navbar_hover_color:#000000;
-            --navbar_active_color:#1E90FF;
-            --table_header_background_color:#1abc9c;/*#5e8cf1;*/
-            --table_cell_background_color:#ffffff;
-            --table_hover_background_color:#f5f5f5;
-            --tab_background_color:#1abc9c;
-            --tab_font_color:#2c3e50;
-            --tab_border_color:#16a085;/*#0e109e;*/
-            --tab_content_color:#ffffff;
-            --input_background_color:#ffffff;
-            --input_font_color:#3c3c3c;
-            --input_border_color:#bbbbbb;
-            --slider_unchecked_background_color:#cccccc;
-            --slider_checked_background_color:#1abc9c;
-            --button_background_color:#ffffff;
-            --button_font_color:#000000;
-            --button_font_hover_color:#ffffff;
-            --button_default_color:#1abc9c;
-            --button_primary_color:#1E90FF;
-            --button_secondary_color:#778899;
-            --button_danger_color:#f04029;
-            --button_warning_color:#f7c40c;
-            --big_lable_color:#3c3c3c;
-            --small_lable_color:#808080;
-            --value_meassure_color:#000000;
-            --value_saved_color:#808080;
-        }
-
         body {
             font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
-            background: var(--window_background_color);
+            background: #DCDCDC;
             margin:0;
         }
         
@@ -64,7 +32,7 @@
             padding: 0;
             top: 0;
             width: 100%;
-            background-color: var(--navbar_background_color);
+            background-color: #555;
             position: fixed;
             overflow: auto;
             z-index: 10;
@@ -74,7 +42,7 @@
             float: left;
             display: block;
             padding: 12px;
-            color: var(--navbar_font_color);
+            color: white;
             text-decoration: none;
             font-size: 32px;
         }
@@ -83,17 +51,17 @@
             float: right;
             display: block;
             padding: 12px;
-            color: var(--navbar_font_color);
+            color: white;
             text-decoration: none;
             font-size: 32px;
         }
 
         .navbar a:hover {
-            background-color: var(--navbar_hover_color);
+            background-color: #000;
         }
 
         .active {
-            background-color: var(--navbar_active_color);
+            background-color: #1E90FF;
         }
         
         .navbar .icon {
@@ -130,9 +98,9 @@
         }
 
         .btn {
-          border: 1px solid var(--input_border_color);
-          color: var(--input_border_color);
-          background-color: var(--input_background_color);
+          border: 1px solid #bbb;
+          color: #bbb;
+          background-color: white;
           padding: 8px 16px;
           padding-right: 100px;
           border-radius: 4px 0px 0px 4px;
@@ -161,7 +129,7 @@
         .tabs {
           position: relative;
           margin: 3rem 0;
-          background: var(--tab_background_color);
+          background: #1abc9c;
         }
         .tabs::before,
         .tabs::after {
@@ -183,8 +151,8 @@
           line-height: 2.75em;
           height: 3em;
           padding: 0 1.618em;
-          background: var(--tab_background_color);
-          border-right: 0.125rem solid var(--tab_border_color);
+          background: #1abc9c;
+          border-right: 0.125rem solid #16a085;
           color: #2c3e50;
           cursor: pointer;
           top: 0;
@@ -202,14 +170,14 @@
           top: 2.75em;
           left: 0;
           padding: 1.618rem;
-          background: var(--tab_content_color);
-          color: var(--tab_font_color);
+          background: #FFFFFF;
+          color: #2c3e50;
           opacity: 0;
           transition: all 0.35s;
         }
         .tab-switch:checked + .tab-label {
-          background: var(--tab_content_color);
-          color: var(--tab_font_color);
+          background: #FFFFFF;
+          color: #2c3e50;
           border-bottom: 0;
           transition: all 0.35s;
           z-index: 1;
@@ -226,7 +194,7 @@
         .button {
             border: none;
             border-radius: 4px;
-            /*color: white;*/
+            color: white;
             padding: 7px 16px;
             text-align: center;
             text-decoration: none;
@@ -239,65 +207,65 @@
         }   
 
         .calButton {
-            background-color: var(--button_background_color); 
-            color: var(--button_font_color); 
-            border: 2px solid var(--button_primary_color);
+            background-color: white; 
+            color: black; 
+            border: 2px solid #1E90FF;
         }
 
         .calButton:hover {
-            background-color: var(--button_primary_color);
-            color: var(--button_font_hover_color);
+            background-color: #1E90FF;
+            color: white;
         }
         
         .tareButton {
-            background-color: var(--button_background_color); 
-            color: var(--button_font_color); 
-            border: 2px solid var(--button_secondary_color);
+            background-color: white; 
+            color: black; 
+            border: 2px solid #778899;
         }
 
         .tareButton:hover {
-            background-color: var(--button_secondary_color);
-            color: var(--button_font_hover_color);
+            background-color: #778899;
+            color: white;
         }
 
         .saveButton {
-            background-color: var(--button_background_color); 
-            color: var(--button_font_color); 
-            border: 2px solid var(--button_default_color);
+            background-color: white; 
+            color: black; 
+            border: 2px solid #1abc9c;
         }
 
         .saveButton:hover {
-            background-color: var(--button_default_color);
-            color: var(--button_font_hover_color);
+            background-color: #1abc9c;
+            color: white;
         }
         
         .backupButton {
-            background-color: var(--button_background_color); 
-            color: var(--button_font_color); 
-            border: 2px solid var(--button_danger_color);
+            background-color: white; 
+            color: black; 
+            border: 2px solid #f04029;
         }
 
         .backupButton:hover {
-            background-color: var(--button_danger_color);
-            color: var(--button_font_hover_color);
+            background-color: #f04029;
+            color: white;
         }
         
         .updateButton {
-            background-color: var(--button_background_color);
-            color: var(--button_font_color); 
-            border: 2px solid var(--button_primary_color);
+            background-color: white; 
+            color: black; 
+            border: 2px solid #1E90FF;
         }
 
         .updateButton:hover {
-            background-color: var(--button_primary_color);
-            color: var(--button_font_hover_color);
+            background-color: #1E90FF;
+            color: white;
         }
         
         .donateButton {
-            background-color: var(--button_background_color); 
-            color: var(--button_font_color);
-            border: 2px solid var(--button_warning_color);
-            background-color: var(--button_warning_color);
+            background-color: white; 
+            color: black; 
+            border: 2px solid #f7c40c;
+            background-color: #f7c40c;
             width: 130px;
             margin: auto;
             display: flex; 
@@ -305,24 +273,22 @@
         }
 
         .donateButton:hover {
-            /*border: 2px solid var(--button_warning_color);
-            background-color: var(--button_warning_color);*/
-            color: var(--button_font_hover_color);
+            border: 2px solid #f7a10c;
+            background-color: #f7a10c;
+            color: white;
         }
         
         .uploadButton {
-            background-color: var(--button_background_color); 
-            color: var(--button_font_color); 
-            border: 2px solid var(--button_primary_color);
+            background-color: white; 
+            color: black; 
+            border: 2px solid #1E90FF;
             border-radius: 0px 4px 4px 0px;
             margin-left: -7px;
-            margin-top: 0px;
-            position: absolute;
         }
 
         .uploadButton:hover {
-            background-color: var(--button_primary_color);
-            color: var(--button_font_hover_color);
+            background-color: #1E90FF;
+            color: white;
         }
         
         /***** Labels *****/
@@ -332,14 +298,14 @@
             padding: 10px 2px;
             padding-top: 15px;
             font-size: 16px;
-            color: var(--big_lable_color);
+            color: #3c3c3c;
         }
 
         small{
             display: inline-block;
             padding: 10px 2px;
             font-size: 12px;
-            color: var(--small_lable_color);
+            color: #808080;
         }
         
         .titlebar {
@@ -386,8 +352,8 @@
         /***** Input *****/
         
         input{
-            background-color:var(--input_background_color); 
-            border: 1px solid var(--input_border_color);
+            background-color:white;
+            border: 1px solid #bbb;
             padding:.75em 1em .5em 1em;
             font-size: 16px;
             color: #3c3c3c;
@@ -399,14 +365,14 @@
         /***** selectbox *****/
 
         select {
-            border: 1px solid var(--input_border_color);
+            border: 1px solid #bbb;
             padding:.75em 1em .5em 1em;
-            background-color:var(--input_background_color); 
+            background-color:white;
             background-image:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACEAAAAKCAYAAAA6jzeaAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyhpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuNi1jMDE0IDc5LjE1Njc5NywgMjAxNC8wOC8yMC0wOTo1MzowMiAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENDIDIwMTQgKE1hY2ludG9zaCkiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6MkVERjJERkRBQkVCMTFFNEFDN0Q5QjI0MDk3OTlBRjkiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6MkVERjJERkVBQkVCMTFFNEFDN0Q5QjI0MDk3OTlBRjkiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDoyRURGMkRGQkFCRUIxMUU0QUM3RDlCMjQwOTc5OUFGOSIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDoyRURGMkRGQ0FCRUIxMUU0QUM3RDlCMjQwOTc5OUFGOSIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/PuR/G+4AAAENSURBVHjatJG9agJREIVnTeIbBPIMVnmCIAhqmUpiYTp3i5Q+ihC5lUVEiYW1BGy0SJsq4AMEAoFACKSw2XwDpxB/UNh14ONw587cOcyN4jgumtkTPIcQJnZkJElyizShRd/KMkQBRtBwEzx8d6QBrxurb2gZw008wh+cw4AB9wcM+P0ALtTXy2yCVc7QOvzCGfQZ1N5jwPN91Xl9Xf2ZN2E8tEBq8KNcYODDhgE/B917XU19losJGXlFKvANEXQZ3JEB167yfl9RfS4RpWm6ufJr5AUulZrquzy+oIqBN8sxtkzISAnxv75aS39qA++WcxR2JTWoDB9KuZZPYWCvCRlZIjcwd9X5JPEvwABY010Pev8kyQAAAABJRU5ErkJggg==');
             background-position: right;
             background-repeat: no-repeat;
             font-size: 16px;
-            color: var(--input_font_color); 
+            color: #3c3c3c;
         }
 
         /* Hide browser-styling in IE10 */
@@ -441,7 +407,7 @@
           left: 0;
           right: 0;
           bottom: 0;
-          background-color: var(--slider_unchecked_background_color); 
+          background-color: #ccc;
           border-radius: 34px;
           -webkit-transition: .4s;
           transition: .4s;
@@ -454,18 +420,18 @@
           width: 26px;
           left: 4px;
           bottom: 4px;
-          background-color: var(--input_background_color); 
+          background-color: white;
           border-radius: 50%;
           -webkit-transition: .4s;
           transition: .4s;
         }
 
         input:checked + .slider {
-          background-color: var(--slider_checked_background_color);
+          background-color: #1abc9c;
         }
 
         input:focus + .slider {
-          box-shadow: 0 0 1px var(--slider_checked_background_color);
+          box-shadow: 0 0 1px #1abc9c;
         }
 
         input:checked + .slider:before {
@@ -482,137 +448,190 @@
         
         var translation;
         var languages = {
-          "en":{   
-            "settingsLabel":"Settings",
+		"en":{
+			"settingsLabel":"Settings",
+	        "tareBtn":"Tare",
+	        "saveBtn":"Save",
+		    "tabGeneral":"General",
+			"deviceHeading":"Device name",
+			"wifiHeading":"WiFi",
+		    "homeWifiSSID":"Home WiFi name (SSID):",
+		    "homeWifiSSIDdesc":"Connect to existing network",
+		    "homeWifiPW":"WiFi password:",
+		    "APwifiSSID":"Access point WiFi name (SSID):",
+			"APwifiSSIDdesc":"If no Home network is present, a access point is created",
+			"APwifiPW":"WiFi password:",
+			"APwifiPWdesc":"At least 8 characters",
+			"checkUpdate":"Automatically check for firmware updates at startup",
+			"enableOTAlabel":"Enable over the air update",
+			"modelDBheading":"Model database",
+			"modelDBdesc":"Download model database to your Computer.",
+			"backupBTN":"Backup",
+			"backupDesc":"Restore your model database. Select the 'models.json' file on your computer.",
+			"file-upload-filename":"Choose a file...",
+			"uploadBTN":"Upload",
+			"aboutHeading":"About CG scale",
+			"aboutDesc":"The CG Scale firmware is open source and available free of charge. If you like it, support the project with a donation and help it to be continuously developed.",
+			"donateBTN":"Donate",
+			"updateHeading":"Update",
+			"updateDesc":"A backup of the model database must be created before the firmware update! Download the latest version from https://github.com/nightflyer88/CG_scale/releases/latest, and then update the firmware (cgscale_xxx.bin) and the file system (cgscale_spiffs.bin).",
+			"updateBTN":"Firmware update",
+			"tabMechanics":"Mechanics",
+			"mechanicsTypeHeading":"Mechanics:",
+			"mechanics0":"Fixed contact surfaces",
+			"mechanics1":"movable contact surfaces",
+			"mechanics2":"2-point landing gear",
+			"mechanics3":"3-point landing gear",
+			"nLoadcellsHeading":"Number of load cells:",
+			"dist1label":"Distance X1 [mm]:",
+			"dist2label":"Distance X2 [mm]:",
+			"dist3label":"Distance X3 [mm]:",
+			"extLC1sourceLabel":"external URL for load cell 1:",
+			"extLC2sourceLabel":"external URL for load cell 2:",
+			"extLC3sourceLabel":"external URL for load cell 3:",
+			"calHelpTxt":"To calibrate the cells it is recommended to use a reference object with a known weight and CG. Enter these values, check that the scale indicates 0g, then place the reference object on it and press 'Auto calibrate'. Otherwise, the calibration values can also be set manually.",
+			"refWgLabel":"Reference weight [g]:",
+			"refCGLabel":"Reference CG [mm]:",
+			"autoCalDesc":"The parameters must be saved before calibration.",
+			"autoCalBTN":"Auto calibrate",
+			"lc1Label":"Loadcell 1: ",
+			"lc2Label":"Loadcell 2: ",
+			"lc3Label":"Loadcell 3: ",
+			"cal1Label":"Calibration factor of load cell 1:",
+			"cal2Label":"Calibration factor of load cell 2:",
+			"cal3Label":"Calibration factor of load cell 3:",
+			"tabBattery":"Battery",
+			"batteryTypeLabel":"Battery type:",
+			"batT0":"OFF",
+			"batT1":"Voltage",
+			"batteryTypeDesc":"Select the battery type to display the percent. 'Voltage' only shows the battery voltage.",
+			"nBatCells":"Number of battery cells:",
+			"R1label":"Value of resistor R1 [ohm]:",
+			"R2label":"Value of resistor R2 [ohm]:"
+		},
+		"de":{
+			"settingsLabel":"Einstellungen",
             "tareBtn":"Tare",
-            "saveBtn":"Save",
-            "tabGeneral":"General",
-            "deviceHeading":"Device name",
-            "wifiHeading":"WiFi",
-            "homeWifiSSID":"Home WiFi name (SSID):",
-            "homeWifiSSIDdesc":"Connect to existing network",
-            "homeWifiPW":"WiFi password:",
-            "APwifiSSID":"Access point WiFi name (SSID):",
-            "APwifiSSIDdesc":"If no Home network is present, a access point is created",
-            "APwifiPW":"WiFi password:",
-            "APwifiPWdesc":"At least 8 characters",
-            "checkUpdate":"Automatically check for firmware updates at startup",
-            "enableOTAlabel":"Enable over the air update",
-            "modelDBheading":"Model database & color profile",
-            "modelDBdesc":"Download the model database or the current color profile to your computer.",
-            "backupBTN":"Download model database",
-            "colorBTN":"Download color profile",
-            "backupDesc":"Restore your model database or load a new color profile. Select the 'models.json' or 'color.json' file on your computer.",
-            "file-upload-filename":"Select models.json or color.json file...",
-            "uploadBTN":"Upload",
-            "resetHeading":"Factory settings",
-            "resetDesc":"Reset all settings and model database to factory defaults.",
-            "resetBTN":"Reset",
-            "aboutHeading":"About CG scale",
-            "aboutDesc":"The CG Scale firmware is open source and available free of charge. If you like it, support the project with a donation and help it to be continuously developed.",
-            "donateBTN":"Donate",
-            "updateHeading":"Update",
-            "updateDesc":"A backup of the model database must be created before the firmware update! Download the latest version from https://github.com/nightflyer88/CG_scale/releases/latest, and then update the firmware (cgscale_xxx.bin) and the file system (cgscale_spiffs.bin).",
-            "updateBTN":"Firmware update",
-            "tabMechanics":"Mechanics",
-            "mechanicsTypeHeading":"Mechanics:",
-            "mechanics0":"Fixed contact surfaces",
-            "mechanics1":"movable contact surfaces",
-            "mechanics2":"2-point landing gear",
-            "mechanics3":"3-point landing gear",
-            "nLoadcellsHeading":"Number of load cells:",
-            "dist1label":"Distance X1 [mm]:",
-            "dist2label":"Distance X2 [mm]:",
-            "dist3label":"Distance X3 [mm]:",
-            "extLC1sourceLabel":"external URL for load cell 1:",
-            "extLC2sourceLabel":"external URL for load cell 2:",
-            "extLC3sourceLabel":"external URL for load cell 3:",
-            "calHelpTxt":"To calibrate the cells it is recommended to use a reference object with a known weight and CG. Enter these values, check that the scale indicates 0g, then place the reference object on it and press 'Auto calibrate'. Otherwise, the calibration values can also be set manually.",
-            "refWgLabel":"Reference weight [g]:",
-            "refCGLabel":"Reference CG [mm]:",
-            "autoCalDesc":"The parameters must be saved before calibration.",
-            "autoCalBTN":"Auto calibrate",
-            "lc1Label":"Loadcell 1: ",
-            "lc2Label":"Loadcell 2: ",
-            "lc3Label":"Loadcell 3: ",
-            "cal1Label":"Calibration factor of load cell 1:",
-            "cal2Label":"Calibration factor of load cell 2:",
-            "cal3Label":"Calibration factor of load cell 3:",
-            "tabBattery":"Battery",
-            "batteryTypeLabel":"Battery type:",
-            "batT0":"OFF",
-            "batT1":"Voltage",
-            "batteryTypeDesc":"Select the battery type to display the percent. 'Voltage' only shows the battery voltage.",
-            "nBatCells":"Number of battery cells:",
-            "R1label":"Value of resistor R1 [Ohm]:",
-            "R2label":"Value of resistor R2 [Ohm]:"
-      },
-          "de":{
-            "settingsLabel":"Einstellungen",
-            "tareBtn":"Tare",
-            "saveBtn":"Speichern",
-            "tabGeneral":"Allgemein",
-            "deviceHeading":"Gerätename",
-            "wifiHeading":"WiFi",
-            "homeWifiSSID":"Home WiFi Name (SSID):",
-            "homeWifiSSIDdesc":"In bestehendes Netzwerk einloggen",
-            "homeWifiPW":"WiFi Passwort:",
-            "APwifiSSID":"Access point WiFi Name (SSID):",
-            "APwifiSSIDdesc":"Wenn kein Heimnetzwerk vorhanden ist, wird ein Access point erstellt",
-            "APwifiPW":"WiFi Passwort:",
-            "APwifiPWdesc":"Mindestens 8 Zeichen",
-            "checkUpdate":"Beim Start automatisch nach Firmware-Updates suchen",
-            "enableOTAlabel":"Over-the-Air Update aktivieren",
-            "modelDBheading":"Modell Datenbank & Farbprofil",
-            "modelDBdesc":"Laden Sie die Modelldatenbank oder das aktuelle Farbprofil auf Ihren Computer herunter.",
-            "backupBTN":"Download Modell Datenbank",
-            "colorBTN":"Download Farbprofil",
-            "backupDesc":"Stellen Sie Ihre Modelldatenbank wieder her, oder laden Sie ein neues Farbprofil. Wählen Sie die Datei 'models.json' oder 'color.json' auf Ihrem Computer.",
-            "file-upload-filename":"Datei models.json oder color.json wählen...",
-            "uploadBTN":"Upload",
-            "resetHeading":"Werkseinstellungen",
-            "resetDesc":"Alle Einstellungen und Modelldatenbank auf Werkseinstellungen zurücksetzten.",
-            "resetBTN":"Zurücksetzten",
-            "aboutHeading":"Über CG Scale",
-            "aboutDesc":"Die CG Scale-Firmware ist Quelloffen und kostenlos erhältlich. Wenn es Ihnen gefällt, unterstützen Sie das Projekt mit einer Spende und helfen Sie mit, dass es kontinuierlich weiterentwickelt wird.",
-            "donateBTN":"Spenden",
-            "updateHeading":"Update",
-            "updateDesc":"Vor dem Firmware Update muss ein Backup der Modelldatenbank erstellt werden ! Laden Sie die neuste Version von https://github.com/nightflyer88/CG_scale/releases/latest herunter, und aktualisieren Sie anschliessend die Firmware (cgscale_xxx.bin) und das Filesystem (cgscale_littlefs.bin).",
-            "updateBTN":"Firmware Update",
-            "tabMechanics":"Mechanik",
-            "mechanicsTypeHeading":"Mechanik:",
-            "mechanics0":"Feste Auflageflächen",
-            "mechanics1":"bewegliche Auflageflächen",
-            "mechanics2":"2 Punkt Fahrwerk",
-            "mechanics3":"3 Punkt Fahrwerk",
-            "nLoadcellsHeading":"Anzahl Wägezellen:",
-            "dist1label":"Distanz X1 [mm]:",
-            "dist2label":"Distanz X2 [mm]:",
-            "dist3label":"Distanz X3 [mm]:",
-            "extLC1sourceLabel":"externe URL für Wägezelle 1:",
-            "extLC2sourceLabel":"externe URL für Wägezelle 2:",
-            "extLC3sourceLabel":"externe URL für Wägezelle 3:",
-            "calHelpTxt":"Zur Kalibrierung der Zellen wird empfohlen, ein Referenzobjekt mit bekanntem Gewicht und Schwerpunkt zu verwenden. Geben Sie diese Werte ein, überprüfen Sie dass die Waage 0g anzeigt, legen Sie das Referenzobjekt darauf und drücken Sie auf 'Automatisch kalibrieren'.  Die Kalibrierwerte können ansonsten auch manuell eingestellt werden.",
-            "refWgLabel":"Referenz Gewicht [g]:",
-            "refCGLabel":"Referenz Schwerpunkt [mm]:",
-            "autoCalDesc":"Vor dem kalibrieren müssen die Parameter gespeichert werden.",
-            "autoCalBTN":"Automatisch kalibrieren",
-            "lc1Label":"Wägezelle 1: ",
-            "lc2Label":"Wägezelle 2: ",
-            "lc3Label":"Wägezelle 3: ",
-            "cal1Label":"Kalibrierfaktor Wägezelle 1:",
-            "cal2Label":"Kalibrierfaktor Wägezelle 2:",
-            "cal3Label":"Kalibrierfaktor Wägezelle 3:",
-            "tabBattery":"Batterie",
-            "batteryTypeLabel":"Batterie Typ:",
-            "batT0":"AUS",
-            "batT1":"Spannung",
-            "batteryTypeDesc":"Wählen Sie den Batterietyp aus, um den Prozentwert anzuzeigen. Mit 'Spannung' wird nur die Batteriespannung angezeigt.",
-            "nBatCells":"Anzahl Batteriezellen",
-            "R1label":"Wert des Widerstandes R1 [Ohm]:",
-            "R2label":"Wert des Widerstandes R2 [Ohm]:"
-          }
-        };
+			"saveBtn":"Speichern",
+			"tabGeneral":"Allgemein",
+			"deviceHeading":"Gerätename",
+			"wifiHeading":"WiFi",
+			"homeWifiSSID":"Home WiFi Name (SSID):",
+			"homeWifiSSIDdesc":"In bestehendes Netzwerk einloggen",
+			"homeWifiPW":"WiFi Passwort:",
+			"APwifiSSID":"Access point WiFi Name (SSID):",
+			"APwifiSSIDdesc":"Wenn kein Heimnetzwerk vorhanden ist, wird ein Access point erstellt",
+			"APwifiPW":"WiFi Passwort:",
+			"APwifiPWdesc":"Mindestens 8 Zeichen",
+			"checkUpdate":"Beim Start automatisch nach Firmware-Updates suchen",
+			"enableOTAlabel":"Over-the-Air Update aktivieren",
+			"modelDBheading":"Modell Datenbank",
+			"modelDBdesc":"Laden Sie die Modelldatenbank auf Ihren Computer herunter.",
+			"backupBTN":"Backup",
+			"backupDesc":"Stellen Sie Ihre Modelldatenbank wieder her. Wählen Sie die Datei 'models.json' auf Ihrem Computer.",
+			"file-upload-filename":"Datei wählen...",
+			"uploadBTN":"Upload",
+			"aboutHeading":"Über CG Scale",
+			"aboutDesc":"Die CG Scale-Firmware ist Quelloffen und kostenlos erhältlich. Wenn es Ihnen gefällt, unterstützen Sie das Projekt mit einer Spende und helfen Sie mit, dass es kontinuierlich weiterentwickelt wird.",
+			"donateBTN":"Spenden",
+			"updateHeading":"Update",
+			"updateDesc":"Vor dem Firmware Update muss ein Backup der Modelldatenbank erstellt werden ! Laden Sie die neuste Version von https://github.com/nightflyer88/CG_scale/releases/latest herunter, und aktualisieren Sie anschliessend die Firmware (cgscale_xxx.bin) und das Filesystem (cgscale_spiffs.bin).",
+			"updateBTN":"Firmware Update",
+			"tabMechanics":"Mechanik",
+			"mechanicsTypeHeading":"Mechanik:",
+			"mechanics0":"Feste Auflageflächen",
+			"mechanics1":"bewegliche Auflageflächen",
+			"mechanics2":"2 Punkt Fahrwerk",
+			"mechanics3":"3 Punkt Fahrwerk",
+			"nLoadcellsHeading":"Anzahl Wägezellen:",
+			"dist1label":"Distanz X1 [mm]:",
+			"dist2label":"Distanz X2 [mm]:",
+			"dist3label":"Distanz X3 [mm]:",
+			"extLC1sourceLabel":"externe URL für Wägezelle 1:",
+			"extLC2sourceLabel":"externe URL für Wägezelle 2:",
+			"extLC3sourceLabel":"externe URL für Wägezelle 3:",
+			"calHelpTxt":"Zur Kalibrierung der Zellen wird empfohlen, ein Referenzobjekt mit bekanntem Gewicht und Schwerpunkt zu verwenden. Geben Sie diese Werte ein, überprüfen Sie dass die Waage 0g anzeigt, legen Sie das Referenzobjekt darauf und drücken Sie auf 'Automatisch kalibrieren'.  Die Kalibrierwerte können ansonsten auch manuell eingestellt werden.",
+			"refWgLabel":"Referenz Gewicht [g]:",
+			"refCGLabel":"Referenz Schwerpunkt [mm]:",
+			"autoCalDesc":"Vor dem kalibrieren müssen die Parameter gespeichert werden.",
+			"autoCalBTN":"Automatisch kalibrieren",
+			"lc1Label":"Wägezelle 1: ",
+			"lc2Label":"Wägezelle 2: ",
+			"lc3Label":"Wägezelle 3: ",
+			"cal1Label":"Kalibrierfaktor Wägezelle 1:",
+			"cal2Label":"Kalibrierfaktor Wägezelle 2:",
+			"cal3Label":"Kalibrierfaktor Wägezelle 3:",
+			"tabBattery":"Batterie",
+			"batteryTypeLabel":"Batterie Typ:",
+			"batT0":"AUS",
+			"batT1":"Spannung",
+			"batteryTypeDesc":"Wählen Sie den Batterietyp aus, um den Prozentwert anzuzeigen. Mit 'Spannung' wird nur die Batteriespannung angezeigt.",
+			"nBatCells":"Anzahl Batteriezellen",
+			"R1label":"Wert des Widerstandes R1 [ohm]:",
+			"R2label":"Wert des Widerstandes R2 [ohm]:"
+		},
+		"fr":{   
+			"settingsLabel":"Paramètres",
+			"tareBtn":"Tare",
+			"saveBtn":"Sauvegarder",
+			"tabGeneral":"Général",
+			"deviceHeading":"Nom de l'appareil",
+			"wifiHeading":"WiFi",
+			"homeWifiSSID":"Nom du Wi-Fi domestique (SSID):",
+			"homeWifiSSIDdesc":"Connectez-vous au réseau existant",
+			"homeWifiPW":"Mot de passe Wi-Fi:",
+			"APwifiSSID":"Nom WiFi du point d'accès (SSID):",
+			"APwifiSSIDdesc":"Si aucun réseau domestique n'est présent, un point d'accès est créé",
+			"APwifiPW":"Mot de passe Wi-Fi:",
+			"APwifiPWdesc":"Au moins 8 caractères",
+			"checkUpdate":"Vérifier automatiquement les mises à jour du micrologiciel au démarrage",
+			"enableOTAlabel":"Activer la mise à jour",
+			"modelDBheading":"Base de données modèles",
+			"modelDBdesc":"Téléchargez la base de données de modèles sur votre ordinateur.",
+			"backupBTN":"Sauvegarde",
+			"backupDesc":"Restaurez votre base de données de modèles. Sélectionnez le fichier 'models.json' sur votre ordinateur.",
+			"file-upload-filename":"Choisissez un fichier...",
+			"uploadBTN":"Télécharger",
+			"aboutHeading":"À propos de CG scale",
+			"aboutDesc":"Le micrologiciel CG Scale est open source et disponible gratuitement. Si vous l'aimez, soutenez le projet par un don et aidez-le à se développer continuellement.",
+			"donateBTN":"Faire un don",
+			"updateHeading":"Mise à jour",
+			"updateDesc":"Une sauvegarde de la base de données du modèle doit être créée avant la mise à jour du firmware ! Téléchargez la dernière version depuis https://github.com/nightflyer88/CG_scale/releases/latest, puis mettez à jour le firmware (cgscale_xxx.bin) et le système de fichiers (cgscale_spiffs.bin).",
+			"updateBTN":"Mise à jour du firmware",
+			"tabMechanics":"Mécanique",
+			"mechanicsTypeHeading":"Mécanique:",
+			"mechanics0":"Surfaces de contact fixes",
+			"mechanics1":"Surfaces de contact mobiles",
+			"mechanics2":"Train d'atterrissage 2 points",
+			"mechanics3":"Train d'atterrissage 3 points",
+			"nLoadcellsHeading":"Nombre de cellules de pesée:",
+			"dist1label":"Distance X1 [mm]:",
+			"dist2label":"Distance X2 [mm]:",
+			"dist3label":"Distance X3 [mm]:",
+			"extLC1sourceLabel":"URL externe pour la cellule de pesée 1:",
+			"extLC2sourceLabel":"URL externe pour la cellule de pesée 2:",
+			"extLC3sourceLabel":"URL externe pour la cellule de pesée 3:",
+			"calHelpTxt":"Pour calibrer les cellules, il est recommandé d'utiliser un objet de référence avec un poids et un CG connus. Saisissez ces valeurs, vérifiez que la balance indique 0g, puis placez l'objet de référence dessus et appuyez sur 'Auto calibrer'. Sinon, les valeurs d'étalonnage peuvent également être réglées manuellement.",
+			"refWgLabel":"Poids de référence [g]:",
+			"refCGLabel":"CG de Référence [mm]:",
+			"autoCalDesc":"Les paramètres doivent être sauvegardés avant l'étalonnage.",
+			"autoCalBTN":"Calibrage automatique",
+			"lc1Label":"Cellule de charge 1: ",
+			"lc2Label":"Cellule de charge 2: ",
+			"lc3Label":"Cellule de charge 3: ",
+			"cal1Label":"Facteur d'étalonnage de la cellule de charge 1:",
+			"cal2Label":"Facteur d'étalonnage de la cellule de charge 2:",
+			"cal3Label":"Facteur d'étalonnage de la cellule de charge 3:",
+			"tabBattery":"Batterie",
+			"batteryTypeLabel":"Type de batterie:",
+			"batT0":"OFF",
+			"batT1":"Voltage",
+			"batteryTypeDesc":"Sélectionnez le type de batterie pour afficher le pourcentage. 'Tension' affiche uniquement la tension de la batterie.",
+			"nBatCells":"Nombre de cellules de batterie:",
+			"R1label":"Valeur de la résistance R1 [ohm]:",
+			"R2label":"Valeur de la résistance R2 [ohm]:"
+		}
+	};
         
         
         function setTranslation(defaultLang) {
@@ -628,47 +647,6 @@
                 }
             }
         }
-
-        function getColor(){
-            var request = new XMLHttpRequest();
-            request.onreadystatechange = function(){
-                if(this.readyState == 4 && this.status == 200){
-                    var colors = JSON.parse(this.responseText);
-                    var root = document.querySelector(':root');
-                    root.style.setProperty('--window_background_color', colors["window_background"]);
-                    root.style.setProperty('--navbar_background_color', colors["navbar_background"]);
-                    root.style.setProperty('--navbar_font_color', colors["navbar_font"]);
-                    root.style.setProperty('--navbar_hover_color', colors["navbar_hover"]);
-                    root.style.setProperty('--navbar_active_color', colors["navbar_active"]);
-                    root.style.setProperty('--table_header_background_color', colors["table_header_background"]);
-                    root.style.setProperty('--table_cell_background_color', colors["table_cell_background"]);
-                    root.style.setProperty('--table_hover_background_color', colors["table_hover_background"]);
-                    root.style.setProperty('--tab_background_color', colors["tab_background"]);
-                    root.style.setProperty('--tab_font_color', colors["tab_font"]);
-                    root.style.setProperty('--tab_border_color', colors["tab_border"]);
-                    root.style.setProperty('--tab_content_color', colors["tab_content"]);
-                    root.style.setProperty('--input_background_color', colors["input_background"]);
-                    root.style.setProperty('--input_font_color', colors["input_font"]);
-                    root.style.setProperty('--input_border_color', colors["input_border"]);
-                    root.style.setProperty('--slider_unchecked_background_color', colors["slider_unchecked_background"]);
-                    root.style.setProperty('--slider_checked_background_color', colors["slider_checked_background"]);
-                    root.style.setProperty('--button_background_color', colors["button_background"]);
-                    root.style.setProperty('--button_font_color', colors["button_font"]);
-                    root.style.setProperty('--button_font_hover_color', colors["button_font_hover"]);
-                    root.style.setProperty('--button_default_color', colors["button_default"]);
-                    root.style.setProperty('--button_primary_color', colors["button_primary"]);
-                    root.style.setProperty('--button_secondary_color', colors["button_secondary"]);
-                    root.style.setProperty('--button_danger_color', colors["button_danger"]);
-                    root.style.setProperty('--button_warning_color', colors["button_warning"]);
-                    root.style.setProperty('--big_lable_color', colors["big_lable"]);
-                    root.style.setProperty('--small_lable_color', colors["small_lable"]);
-                    root.style.setProperty('--value_meassure_color', colors["value_meassure"]);
-                    root.style.setProperty('--value_saved_color', colors["value_saved"]);
-                }
-            }
-            request.open("GET", "color.json", true);
-            request.send();
-        }   
         
         function getHead(){
             var request = new XMLHttpRequest();
@@ -878,21 +856,6 @@
             request.open("GET", "tare", true);
             request.send();
         }
-
-        function factoryReset(){
-            if (confirm("Do you really want to reset to factory defaults ?")){
-                var request = new XMLHttpRequest();
-                request.onreadystatechange = function(){
-                    if(this.readyState == 4 && this.status == 200){
-                        location.reload();
-                    }else if(this.readyState == 4 && this.status == 404){
-                        alert("Factory default successfully reset !");
-                    }
-                }
-                request.open("GET", "factoryReset?reset=1", true);
-                request.send();
-            }
-        }
         
         function drawBattery(value){
             document.getElementById("batValue").innerHTML = value;
@@ -973,7 +936,7 @@
     <div class="navbar" id="Navbar">
         <logo id="batContainer">
             <canvas id="batCanvas" height="24" width="50" style="vertical-align:middle;"></canvas>
-            <span id="batValue" style="color:var(--navbar_font_color); padding-right:20px; vertical-align:middle; font-size:17px;">-</span>
+            <span id="batValue" style="color:#FFFF; padding-right:20px; vertical-align:middle; font-size:17px;">-</span>
         </logo>
         <logo id="ssid" style="vertical-align:middle; font-size:32px;"></logo>
         
@@ -990,7 +953,7 @@
         
     <div>
         <div class="titlebar">
-            <span style="color:var(--small_lable_color);" id="settingsLabel"></span>
+            <span style="color: #808080;" id="settingsLabel"></span>
         </div>
         <div class="buttonbar">
             <button type="button" class="button saveButton" onclick="saveParameter()" id="saveBtn"></button>
@@ -1050,11 +1013,6 @@
                     <a href="/models.json" download="models.json"> 
                         <button type="button" class="button backupButton" id="backupBTN"></button> 
                     </a>
-                    <a href="/color.json" download="color.json"> 
-                        <button type="button" class="button backupButton" id="colorBTN"></button> 
-                    </a>
-
-                    
                     <div style="margin-top:30px;">
                         <small id="backupDesc"></small>
                         <form method="post" enctype="multipart/form-data">
@@ -1086,13 +1044,6 @@
                     <button type="button" class="button updateButton" onclick="location.href='/update';" id="updateBTN"></button>
                 </div> 
             </div>
-            <h2 style="margin-top:100px;" id="resetHeading"></h2>
-            <div style="margin-top:20px;">
-                <small id="resetDesc"></small>
-                <div style="margin-top:20px;">
-                    <button type="button" class="button backupButton" onclick="factoryReset()" id="resetBTN"></button>
-                </div> 
-            </div> 
             <h2 style="margin-top:100px;" id="aboutHeading"></h2>
             <div style="margin-top:20px;">
                 <small id="aboutDesc"></small>
@@ -1225,10 +1176,9 @@
       </div>
     </div>    
     
-    <div style="color:var(--small_lable_color); text-align:center; font-size:12px;">(c) 2025 M. Lehmann - Version: <span id="cgscaleVersion">--</span></div>
+    <div style="color:#808080; text-align:center; font-size:12px;">(c) 2020 M. Lehmann - Version: <span id="cgscaleVersion">--</span></div>
     <script>
         setTranslation("en");
-        getColor();
         getHead();
         getWiFiNetworks();
         getRawValue();

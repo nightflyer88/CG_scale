@@ -1,23 +1,36 @@
 # CG scale
 
-Die CG Scale-Firmware ist Quelloffen und kostenlos erhältlich. Wenn es Ihnen gefällt, unterstützen Sie das Projekt mit einer Spende und helfen Sie mit, dass es kontinuierlich weiterentwickelt wird.
+The CG Scale firmware is open source and available for free. If you like it, support the project with a donation and help it continue to develop.
 
 [![Donate](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/Paypal.png)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=R69PMKTCXQBUU&source=url)
 
-Schwerpunktwaage auf Arduinobasis zum auswiegen von Flugmodellen. Es werden relativ wenige Bauteile benötigt, und sollte auch von Elektronikanfänger problemlos nachgebaut werden können.
-Die wichtigsten Funktionen:
+Arduino-based balance scale for weighing model aircraft. Relatively few components are required and should be easy to recreate even for electronics beginners.
+The most important functions:
 
-- unterstützt Waagen mit 2 oder 3 Wiegezellen
-- unterstützt ESP8266 (auch Wifi Kit 8) und Arduino mit ATmega328, ATmega32u4
-- automatische Kalibrierung anhand eines Referenzobjekts, dadurch kein mühsames eruieren der Kalibrierwerte
-- Anzeige durch OLED Display
-- Batteriespannnung kann gemessen werden
-- Einstellungen werden durch ein Menü per serieller Schnittstelle vorgenommen 
-- Beim ESP8266 können die Einstellungen auch bequem per Webpage vorgenommen werden
-- Parameter werden dauerhaft im EEprom gespeichert, und müssen nach einem Softwareupdate nicht neu parametriert werden
-- nur wenige Bauteile erforderlich, dadurch schnell und einfach aufgebaut
+- supports scales with 2 or 3 load cells
+- supports ESP8266 (also Wifi Kit 8) and Arduino with ATmega328, ATmega32u4
+- Automatic calibration based on a reference object, meaning no laborious determination of the calibration values
+- Display via OLED display
+- Battery voltage can be measured
+- Settings are made through a menu via the serial interface
+- With the ESP8266, the settings can also be easily made via the webpage
+- Parameters are permanently saved in the EEprom and do not have to be re-parameterized after a software update
+- Only a few components required, making it quick and easy to assemble
 
-Weiter infos zum Aufbau findet man im [Wiki](https://github.com/nightflyer88/CG_scale/wiki)
+# ENGLISH
+
+Here is the assembly and user guide for this scale model balance
+You can find the full description [HERE](https://github.com/ZINKTiti/CG_scale-1/wiki/ENGLISH)
+
+# FRANCAIS
+
+Voici le guide de montage et d'utilisation de cette balance pour model réduit
+Vous trouver toute la description [ICI](https://github.com/ZINKTiti/CG_scale-1/wiki/FRANCAIS)
+
+# DEUTSCH
+
+Hier finden Sie die Montage- und Bedienungsanleitung für diese Modellwaage
+Sie finden die gesamte Beschreibung [HIER](https://github.com/nightflyer88/CG_scale/wiki)
 
 ![init](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/cgScale_init.jpeg)
 ![run](https://github.com/nightflyer88/CG_scale/blob/master/Doc/img/cgScale.jpeg)
