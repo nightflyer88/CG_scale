@@ -207,23 +207,6 @@ void resetCPU() {}
 #endif
 
 
-void readFile(const char * path) {
-  Serial.printf("Reading file: %s\n", path);
-
-  File file = LittleFS.open(path, "r");
-  if (!file) {
-    Serial.println("Failed to open file for reading");
-    return;
-  }
-
-  Serial.print("Read from file: ");
-  while (file.available()) {
-    Serial.write(file.read());
-  }
-  file.close();
-}
-
-
 // convert time to string
 char * TimeToString(unsigned long t)
 {
@@ -1191,7 +1174,7 @@ void handleFileUpload() {
   if (upload.status == UPLOAD_FILE_START) {
     String filename = upload.filename;
     if (!filename.startsWith("/")) filename = "/" + filename;
-    if (filename != MODEL_FILE ) server.send(500, "text/plain", "wrong file !");
+    if (filename != MODEL_FILE && filename != COLOR_FILE ) server.send(500, "text/plain", "wrong file !");
     // Open the file for writing in Filesystem (create if it doesn't exist)
     fsUploadFile = LittleFS.open(filename, "w");
     filename = String();
@@ -1347,9 +1330,6 @@ void setup() {
   }
   EEPROM.begin(EEPROM_SIZE);
   printConsole(T_BOOT, "init filesystem");
-
-  readFile(MODEL_FILE);
-  Serial.println();
 #endif
 
   // read settings from eeprom

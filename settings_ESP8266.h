@@ -164,6 +164,10 @@ const char ip[4] =                  {1,2,3,4};    // default IP address
 #define MODEL_FILE                  "/models.json"   // file to store models
 
 
+// **** Color profile settings ****
+#define COLOR_FILE                  "/color.json"   // file to store color profile
+
+
 
 // **** virtual weight settings ****
 
