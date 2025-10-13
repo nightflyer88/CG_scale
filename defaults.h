@@ -44,7 +44,7 @@ enum {
   MENU_BATTERY_MEASUREMENT,
   MENU_BATTERY_CELLS,
   MENU_SHOW_ACTUAL,
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
   MENU_WIFI_INFO,
 #endif
   MENU_RESET_DEFAULT
@@ -62,7 +62,7 @@ enum {
 };
 
 
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
 // https update
 enum {
   PROBE_UPDATE,
@@ -89,7 +89,7 @@ enum {
   P_RESISTOR_R2 =                       P_RESISTOR_R1 + sizeof(float),
 #if defined(__AVR__)
   EEPROM_SIZE =                         P_RESISTOR_R2 + sizeof(float)
-#elif defined(ESP8266)
+#elif defined(ESP8266) || defined(ESP32)
   P_SSID_STA =                          P_RESISTOR_R2 + sizeof(float),
   P_PASSWORD_STA =                      P_SSID_STA + MAX_SSID_PW_LENGHT + 1,
   P_SSID_AP =                           P_PASSWORD_STA + MAX_SSID_PW_LENGHT + 1,

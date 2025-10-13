@@ -4,11 +4,12 @@
                       (c) 2019-2025 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "2.31"
+#define CGSCALE_VERSION "2.32"
 /*
 
   ******************************************************************
   history:
+  V2.32   13.10.25     added support for ESP32
   V2.31   22.04.25     Library update to littleFS, ArduinoJson 7, webpage update, add color profiles
   V2.3    01.03.22     Up to three ESPs can be linked via WLAN. Useful for landing gear scales on engine models
   V2.22   28.11.20     fixed RAM problems with JSON
@@ -96,18 +97,29 @@
 #include <Wire.h>
 
 // libraries for ESP8266
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
 #include <FS.h>
 #include <LittleFS.h>
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
 #include <WiFiClientSecure.h>
-#include <ESP8266HTTPClient.h>
-#include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <ElegantOTA.h> //V2.2.9
 #include <ArduinoJson.h> //V7.4.1
+#endif
+
+#if defined(ESP8266)
+#include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266HTTPClient.h>
+#include <ESP8266mDNS.h>
+#endif
+
+// libraries for ESP32
+#if defined(ESP32)
+#include <WiFi.h> //<ESP8266WiFi.h>
+#include <WebServer.h> //<ESP8266WebServer.h>
+#include <HTTPClient.h> //<ESP8266HTTPClient.h>
+#include <ESPmDNS.h> //<ESP8266mDNS.h>
 #endif
 
 // load settings
@@ -119,6 +131,8 @@
   #else
     #include "settings_ESP8266.h"
   #endif
+#elif defined(ESP32)
+  #include "settings_ESP32.h"
 #endif
 
 // HX711 constructor array (dout pin, sck pint):
@@ -127,6 +141,11 @@ HX711_ADC LoadCell[] {HX711_ADC(PIN_LOADCELL1_DOUT, PIN_LOADCELL1_PD_SCK), HX711
 // webserver constructor
 #if defined(ESP8266)
 ESP8266WebServer server(80);
+#elif defined(ESP32)
+WebServer server(80);
+#endif
+
+#if defined(ESP8266) || defined(ESP32)
 IPAddress apIP(ip[0], ip[1], ip[2], ip[3]);
 WiFiClientSecure httpsClient;
 File fsUploadFile;              // a File object to temporarily store the received file
@@ -143,7 +162,7 @@ struct VirtualWeight {
 
 struct Model {
   float distance[3] = {DISTANCE_X1, DISTANCE_X2, DISTANCE_X3};
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
   char name[MAX_MODELNAME_LENGHT + 1] = "";
   float targetCGmin = 0;
   float targetCGmax = 0;
@@ -162,7 +181,7 @@ uint8_t batType = BAT_TYPE;
 uint8_t batCells = BAT_CELLS;
 float refWeight = REF_WEIGHT;
 float refCG = REF_CG;
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
 char device_Name[MAX_SSID_PW_LENGHT + 1] = SSID_AP;
 char ssid_STA[MAX_SSID_PW_LENGHT + 1] = SSID_STA;
 char password_STA[MAX_SSID_PW_LENGHT + 1] = PASSWORD_STA;
@@ -190,7 +209,7 @@ const uint8_t *oledFontBig;
 const uint8_t *oledFontLarge;
 const uint8_t *oledFontNormal;
 const uint8_t *oledFontSmall;
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
 String updateMsg = "";
 bool wifiSTAmode = true;
 float gitVersion = -1;
@@ -202,7 +221,7 @@ unsigned long ota_progress_millis = 0;
 // Restart CPU
 #if defined(__AVR__)
 void(* resetCPU) (void) = 0;
-#elif defined(ESP8266)
+#elif defined(ESP8266) || defined(ESP32)
 void resetCPU() {}
 #endif
 
@@ -393,7 +412,7 @@ void printScaleOLED() {
         }
       }
 
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
       if (DISPLAY_HIGHT <= 32 && (strlen(loadCellURL[LC1]) || strlen(loadCellURL[LC2]) || strlen(loadCellURL[LC3]))) {
         oledDisplay.setFont(oledFontBig);
         float weight = 0;
@@ -463,7 +482,7 @@ void printScaleOLED() {
           oledDisplay.print(buff);
           oledDisplay.print(F(" mm"));
         }
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
       }
 #endif
     } else {
@@ -503,7 +522,7 @@ void handleTareBtn() {
 void saveCalFactor(int nLC) {
   LoadCell[nLC].setCalFactor(calFactorLoadcell[nLC]);
   EEPROM.put(P_LOADCELL1_CALIBRATION_FACTOR + (nLC * sizeof(float)), calFactorLoadcell[nLC]);
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
   EEPROM.commit();
 #endif
 }
@@ -521,7 +540,7 @@ void updateLoadcells() {
 void tareLoadcells() {
   for (int i = LC1; i <= LC3; i++) {
     if (i < nLoadcells) {
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
       if(strlen(loadCellURL[i]) == 0){
         LoadCell[i].tare();
       }
@@ -575,7 +594,7 @@ bool getLoadcellError() {
       if (LoadCell[i].getTareTimeoutFlag()) {
         String msg = "ERROR: Timeout TARE Lc" + String(i + 1);
         errMsg[++errMsgCnt] = msg + "\n";
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
         printConsole(T_ERROR, msg);
 #endif
         err = true;
@@ -592,7 +611,7 @@ void resetFactoryDefaults(){
     EEPROM.write(i, 0xFF);
   }
   Serial.end();
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
   EEPROM.commit();
   // delete json model file
   if (LittleFS.exists(MODEL_FILE)) {
@@ -603,7 +622,7 @@ void resetFactoryDefaults(){
 }
 
 
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
 
 void writeModelData(JsonObject object) {
   char buff[8];
@@ -1319,7 +1338,7 @@ void setup() {
   Serial.println();
   delay(1000);
 
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
   printConsole(T_BOOT, "startup CG scale V" + String(CGSCALE_VERSION));
 
   // init filesystem
@@ -1369,7 +1388,7 @@ void setup() {
     }
   }
 
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
   if (EEPROM.read(P_SSID_STA) != 0xFF) {
     EEPROM.get(P_SSID_STA, ssid_STA);
   }
@@ -1433,7 +1452,7 @@ void setup() {
     if (i < nLoadcells) {
       LoadCell[i].begin();
       LoadCell[i].setCalFactor(calFactorLoadcell[i]);
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
       printConsole(T_BOOT, "init Loadcell " + String(i + 1));
 #endif
     }
@@ -1447,7 +1466,7 @@ void setup() {
   tareLoadcells();
   getLoadcellError();
 
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
 
   printConsole(T_BOOT, "Wifi: STA mode - connecting with: " + String(ssid_STA));
 
@@ -1483,7 +1502,12 @@ void setup() {
   hostname = device_Name;
   hostname.replace(" ", "");
   hostname.toLowerCase();
+#if defined(ESP8266)
   if (!MDNS.begin(hostname, WiFi.localIP())) {
+#elif defined(ESP32)
+  if (!MDNS.begin(hostname)) {
+    MDNS.addService("http", "tcp", 80);
+#endif
     hostname = "mDNS failed";
     printConsole(T_ERROR, "Wifi: " + hostname);
   } else {
@@ -1596,9 +1620,9 @@ void setup() {
 
 void loop() {
 
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
 
-#if ENABLE_MDNS
+#if ENABLE_MDNS && defined(ESP8266)
   MDNS.update();
 #endif
 
@@ -1634,7 +1658,7 @@ void loop() {
     // get Loadcell weights
     for (int i = LC1; i <= LC3; i++) {
       if (i < nLoadcells) {
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
         if(strlen(loadCellURL[i]) == 0){
 #endif
           // get local data
@@ -1643,7 +1667,7 @@ void loop() {
           // IIR filter
           weightLoadCell[i] = weightLoadCell[i] + SMOOTHING_LOADCELL * (lastWeightLoadCell[i] - weightLoadCell[i]);
           lastWeightLoadCell[i] = weightLoadCell[i];
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
         }else{
           // get data from external server
           WiFiClient client;
@@ -1704,7 +1728,7 @@ void loop() {
         // CG longitudinal axis
         CG_length = ((weightLoadCell[LC2] * model.distance[X2]) / weightTotal) + model.distance[X1];
   
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
         if (model.mechanicsType == 2) {
           CG_length = ((weightLoadCell[LC2] * model.distance[X2]) / weightTotal) - model.distance[X1];
         } else if (model.mechanicsType == 3) {
@@ -1760,7 +1784,7 @@ void loop() {
           case MENU_LOADCELLS:
             nLoadcells = Serial.parseInt();
             EEPROM.put(P_NUMBER_LOADCELLS, nLoadcells);
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
             EEPROM.commit();
 #endif
             menuPage = 0;
@@ -1769,7 +1793,7 @@ void loop() {
           case MENU_DISTANCE_X1 ... MENU_DISTANCE_X3:
             model.distance[menuPage - MENU_DISTANCE_X1] = Serial.parseFloat();
             EEPROM.put(P_DISTANCE_X1 + ((menuPage - MENU_DISTANCE_X1) * sizeof(float)), model.distance[menuPage - MENU_DISTANCE_X1]);
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
             EEPROM.commit();
 #endif
             menuPage = 0;
@@ -1778,7 +1802,7 @@ void loop() {
           case MENU_REF_WEIGHT:
             refWeight = Serial.parseFloat();
             EEPROM.put(P_REF_WEIGHT, refWeight);
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
             EEPROM.commit();
 #endif
             menuPage = 0;
@@ -1787,7 +1811,7 @@ void loop() {
           case MENU_REF_CG:
             refCG = Serial.parseFloat();
             EEPROM.put(P_REF_CG, refCG);
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
             EEPROM.commit();
 #endif
             menuPage = 0;
@@ -1809,7 +1833,7 @@ void loop() {
           case MENU_RESISTOR_R1 ... MENU_RESISTOR_R2:
             resistor[menuPage - MENU_RESISTOR_R1] = Serial.parseFloat();
             EEPROM.put(P_RESISTOR_R1 + ((menuPage - MENU_RESISTOR_R1) * sizeof(float)), resistor[menuPage - MENU_RESISTOR_R1]);
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
             EEPROM.commit();
 #endif
             menuPage = 0;
@@ -1818,7 +1842,7 @@ void loop() {
           case MENU_BATTERY_MEASUREMENT:
             batType = Serial.parseInt();
             EEPROM.put(P_BAT_TYPE, batType);
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
             EEPROM.commit();
 #endif
             menuPage = 0;
@@ -1827,7 +1851,7 @@ void loop() {
           case MENU_BATTERY_CELLS:
             batCells = Serial.parseInt();
             EEPROM.put(P_BATT_CELLS, batCells);
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
             EEPROM.commit();
 #endif
             menuPage = 0;
@@ -1919,7 +1943,7 @@ void loop() {
             Serial.print(MENU_SHOW_ACTUAL);
             Serial.print(F(" - Show actual values\n"));
 
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
             Serial.print(MENU_WIFI_INFO);
             Serial.print(F(" - Show WiFi network info\n"));
 #endif
@@ -2034,7 +2058,7 @@ void loop() {
           }
           Serial.println();
           break;
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
         case MENU_WIFI_INFO:
           {
             Serial.println("\n\n********************************************\nWiFi network information\n");
@@ -2060,6 +2084,7 @@ void loop() {
                 Serial.print(WiFi.RSSI(i));
                 Serial.print("dBm) ");
                 switch (WiFi.encryptionType(i)) {
+#if defined(ESP8266)
                   case ENC_TYPE_WEP:
                     Serial.print("WEP");
                     break;
@@ -2072,6 +2097,20 @@ void loop() {
                   case ENC_TYPE_AUTO:
                     Serial.print("Auto");
                     break;
+#elif defined(ESP32)
+                  case 5:
+                    Serial.print("WEP");
+                    break;
+                  case 2:
+                    Serial.print("WPA");
+                    break;
+                  case 4:
+                    Serial.print("WPA2");
+                    break;
+                  case 8:
+                    Serial.print("Auto");
+                    break;
+#endif
                 }
                 Serial.println("");
               }
