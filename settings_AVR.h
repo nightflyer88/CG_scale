@@ -91,6 +91,7 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NON
 
 // analog input pin
 #define VOLTAGE_PIN                   A7
+#define AD_RESOLUTION                 1024  // 10bit
 
 // supply voltage
 #define V_REF                         5000     // set supply voltage from 1800 to 5500mV

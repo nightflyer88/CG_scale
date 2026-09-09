@@ -1,14 +1,15 @@
 /*
   ------------------------------------------------------------------
                             CG scale
-                      (c) 2019-2025 by M. Lehmann
+                      (c) 2019-2026 by M. Lehmann
   ------------------------------------------------------------------
 */
-#define CGSCALE_VERSION "2.32"
+#define CGSCALE_VERSION "2.33"
 /*
 
   ******************************************************************
   history:
+  V2.33   02.09.26     ESP32 bug fixed: default pins for display adjusted, resolution for voltage sensor changed to 12 bits
   V2.32   13.10.25     added support for ESP32
   V2.31   22.04.25     Library update to littleFS, ArduinoJson 7, webpage update, add color profiles
   V2.3    01.03.22     Up to three ESPs can be linked via WLAN. Useful for landing gear scales on engine models
@@ -1647,7 +1648,7 @@ void loop() {
 
     // read battery voltage
     if (batType > B_OFF) {
-      batVolt = (analogRead(VOLTAGE_PIN) / 1024.0) * V_REF * ((resistor[R1] + resistor[R2]) / resistor[R2]) / 1000.0;
+      batVolt = (analogRead(VOLTAGE_PIN) / (float)AD_RESOLUTION) * V_REF * ((resistor[R1] + resistor[R2]) / resistor[R2]) / 1000.0;
 #if ENABLE_PERCENTLIST
       if (batType > B_VOLT) {
         batVolt = percentBat(batVolt / batCells);

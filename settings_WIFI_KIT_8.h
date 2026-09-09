@@ -96,6 +96,7 @@ U8G2_SSD1306_128X32_UNIVISION_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/16, /* cl
 
 // analog input pin
 #define VOLTAGE_PIN                A0
+#define AD_RESOLUTION              1024  // 10bit
 
 // supply voltage
 #define V_REF                      3300  // set supply voltage from 1800 to 5500mV

@@ -81,8 +81,8 @@ CG scale with 3 Loadcells:
 
 // Please UNCOMMENT the display used
 
-U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ 2, /* data=*/ 4);
-//U8G2_SSD1306_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ D3, /* data=*/ D4);
+U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ 22, /* data=*/ 21);
+//U8G2_SSD1306_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ 22, /* data=*/ 21);
 
 #define DISPLAY_WIDTH                 128
 #define DISPLAY_HIGHT                 64
@@ -92,6 +92,7 @@ U8G2_SH1106_128X64_NONAME_1_HW_I2C oledDisplay(U8G2_R0, /* reset=*/ U8X8_PIN_NON
 
 // analog input pin
 #define VOLTAGE_PIN                   A0
+#define AD_RESOLUTION                 4096     // 12bit
 
 // supply voltage
 #define V_REF                         3300     // set supply voltage from 1800 to 5500mV
